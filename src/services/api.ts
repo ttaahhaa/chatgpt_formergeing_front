@@ -1,90 +1,95 @@
 // src/services/api.ts
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+// Define types for API responses
+interface Document {
+  id: string;
+  filename: string;
+  metadata?: {
+    type?: string;
+    size?: number;
+    created?: string;
+    lastModified?: string;
+  };
+}
 
+interface DocumentsResponse {
+  documents: Document[];
+  total: number;
+}
+
+// API service with methods for document operations
 export const api = {
-  async uploadDocument(file: File) {
-    const formData = new FormData();
-    formData.append('file', file);
+  // Get all documents
+  async getDocuments(): Promise<DocumentsResponse> {
+    try {
+      const response = await fetch('/api/documents');
 
-    const response = await fetch(`${API_BASE_URL}/api/upload`, {
-      method: 'POST',
-      body: formData,
-    });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to fetch documents');
+      }
 
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Error uploading document');
+      return await response.json();
+    } catch (error) {
+      console.error('API error in getDocuments:', error);
+      throw error;
     }
-
-    return response.json();
   },
 
-  async getDocuments() {
-    const response = await fetch(`${API_BASE_URL}/api/documents`);
-    
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Error fetching documents');
-    }
+  // Upload a document
+  async uploadDocument(file: File): Promise<Document> {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
 
-    return response.json();
+      const response = await fetch('/api/documents/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to upload document');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('API error in uploadDocument:', error);
+      throw error;
+    }
   },
 
-  async clearDocuments() {
-    const response = await fetch(`${API_BASE_URL}/api/clear_documents`, {
-      method: 'POST',
-    });
-    
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Error clearing documents');
-    }
+  // Delete a specific document
+  async deleteDocument(documentId: string): Promise<void> {
+    try {
+      const response = await fetch(`/api/documents/${documentId}`, {
+        method: 'DELETE',
+      });
 
-    return response.json();
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to delete document');
+      }
+    } catch (error) {
+      console.error('API error in deleteDocument:', error);
+      throw error;
+    }
   },
 
-  async chat(message: string, conversationId?: string, context?: any[], mode: string = 'auto') {
-    const response = await fetch(`${API_BASE_URL}/api/chat`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        message,
-        conversation_id: conversationId,
-        conversation_context: context,
-        mode
-      }),
-    });
-    
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Error processing chat');
+  // Clear all documents
+  async clearDocuments(): Promise<void> {
+    try {
+      const response = await fetch('/api/documents', {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to clear documents');
+      }
+    } catch (error) {
+      console.error('API error in clearDocuments:', error);
+      throw error;
     }
-
-    return response.json();
-  },
-
-  async getLogs() {
-    const response = await fetch(`${API_BASE_URL}/api/logs`);
-    
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Error fetching logs');
-    }
-
-    return response.json();
-  },
-
-  async getLogContent(filename: string) {
-    const response = await fetch(`${API_BASE_URL}/api/logs/${filename}`);
-    
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Error fetching log content');
-    }
-
-    return response.json();
   }
 };

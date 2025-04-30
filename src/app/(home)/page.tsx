@@ -3,11 +3,11 @@
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import { SearchIcon } from "@/assets/icons";
-import { createTimeFrameExtractor } from "@/utils/timeframe-extractor";
 import DocumentManagement from "@/components/DocumentManagement/DocumentManagement";
 import SettingsPanel from "@/components/Settings/SettingsPanel";
 import LogsPanel from "@/components/Logs/LogsPanel";
 import StatusPanel from "@/components/Status/StatusPanel";
+
 type PropsType = {
   searchParams: Promise<{
     selected_time_frame?: string;
@@ -37,7 +37,7 @@ export default function Home({ searchParams }: PropsType) {
   return (
     <div className="flex min-h-screen w-full flex-col items-center bg-gray-50 dark:bg-gray-900 px-4 py-10">
       {/* Tabs */}
-      <div className="mb-8 flex w-full max-w-4xl items-center justify-center gap-4">
+      <div className="mb-8 flex w-full max-w-4xl items-center justify-center gap-4 flex-wrap">
         {tabs.map((tab) => (
           <button
             key={tab.id}
@@ -63,7 +63,7 @@ export default function Home({ searchParams }: PropsType) {
             </h1>
 
             {/* Radio Buttons */}
-            <div className="mb-5 flex items-center justify-center gap-6">
+            <div className="mb-5 flex items-center justify-center gap-6 flex-wrap">
               <label className="inline-flex items-center gap-2 text-sm font-medium text-gray-800 dark:text-gray-200">
                 <input
                   type="radio"
@@ -117,14 +117,13 @@ export default function Home({ searchParams }: PropsType) {
           </>
         )}
 
-        {activeTab === "documents" && (<DocumentManagement />)}
+        {activeTab === "documents" && <DocumentManagement />}
 
-        {activeTab === "settings" && (<SettingsPanel />)}
+        {activeTab === "settings" && <SettingsPanel />}
 
-        {activeTab === "logs" && (<LogsPanel />)}
+        {activeTab === "logs" && <LogsPanel />}
 
-        {activeTab === "status" && (<StatusPanel />
-        )}
+        {activeTab === "status" && <StatusPanel />}
       </div>
     </div>
   );
