@@ -166,8 +166,8 @@ export default function SettingsPanel() {
                             <button
                                 onClick={() => setActiveTab(tab)}
                                 className={`inline-block p-4 border-b-2 rounded-t-lg ${activeTab === tab
-                                        ? 'text-primary border-primary dark:text-primary dark:border-primary'
-                                        : 'border-transparent hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300'
+                                    ? 'text-primary border-primary dark:text-primary dark:border-primary'
+                                    : 'border-transparent hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300'
                                     }`}
                             >
                                 {tab.charAt(0).toUpperCase() + tab.slice(1)}

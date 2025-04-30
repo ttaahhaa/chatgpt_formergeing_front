@@ -1,136 +1,121 @@
-// src/components/Status/StatusPanel.tsx
 "use client"
 
 import { useState, useEffect } from 'react';
 
-// Define types for system status data
+// Define types for API responses
 interface SystemStatus {
-    server: {
-        status: 'online' | 'degraded' | 'offline';
-        uptime: string;
-        lastRestart: string;
-        currentLoad: number;
-        memoryUsage: number;
+    llm_status: 'available' | 'unavailable';
+    embeddings_status: 'available' | 'unavailable';
+    current_model: string;
+    document_count: number;
+    vector_store_info?: {
+        documents: number;
+        embeddings: number;
     };
-    api: {
-        status: 'online' | 'degraded' | 'offline';
-        responseTime: string;
-        requestsToday: number;
-        errorRate: number;
-        usage: number;
+    memory_usage?: string;
+    system_info?: {
+        os: string;
+        architecture: string;
+        python_version: string;
+        app_version: string;
     };
-    database: {
-        status: 'online' | 'degraded' | 'offline';
-        connections: number;
-        queryLoad: number;
-    };
-    storage: {
-        status: 'online' | 'degraded' | 'offline';
-        totalSpace: string;
-        usedSpace: string;
-        usagePercent: number;
-    };
-}
-
-interface Incident {
-    id: string;
-    severity: 'critical' | 'major' | 'minor';
-    title: string;
-    date: string;
-    description: string;
-    resolved: boolean;
 }
 
 export default function StatusPanel() {
+    const [status, setStatus] = useState<SystemStatus | null>(null);
     const [loading, setLoading] = useState(true);
-    const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
-    const [incidents, setIncidents] = useState<Incident[]>([]);
     const [error, setError] = useState<string | null>(null);
+    const [runningHealthCheck, setRunningHealthCheck] = useState(false);
+    const [healthCheckResults, setHealthCheckResults] = useState<any>(null);
     const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
 
-    // Fetch status data
+    // Fetch status from the API
     const fetchStatus = async () => {
         setLoading(true);
         setError(null);
 
         try {
-            // In a real application, fetch from your API
-            // const response = await fetch('/api/status');
-            // const data = await response.json();
+            // Call our API endpoint
+            const response = await fetch('/api/status');
 
-            // Simulate API response with mock data
-            await new Promise(resolve => setTimeout(resolve, 800));
+            if (!response.ok) {
+                throw new Error(`Error fetching status: ${response.statusText}`);
+            }
 
-            // Mock data for demonstration
-            setSystemStatus({
-                server: {
-                    status: 'online',
-                    uptime: '99.9% (30 days)',
-                    lastRestart: 'April 15, 2025 04:30 AM',
-                    currentLoad: 42,
-                    memoryUsage: 68
-                },
-                api: {
-                    status: 'online',
-                    responseTime: '145ms (avg)',
-                    requestsToday: 12458,
-                    errorRate: 0.02,
-                    usage: 34
-                },
-                database: {
-                    status: 'online',
-                    connections: 24,
-                    queryLoad: 16
-                },
-                storage: {
-                    status: 'online',
-                    totalSpace: '500 GB',
-                    usedSpace: '215 GB',
-                    usagePercent: 43
-                }
-            });
-
-            setIncidents([
-                {
-                    id: '1',
-                    severity: 'minor',
-                    title: 'API Degraded Performance',
-                    date: 'Apr 28, 2025',
-                    description: 'API experienced increased latency for 15 minutes due to database maintenance. All systems now operating normally.',
-                    resolved: true
-                },
-                {
-                    id: '2',
-                    severity: 'major',
-                    title: 'Database Outage',
-                    date: 'Apr 22, 2025',
-                    description: 'Brief database outage affecting document retrieval. Issue resolved within 5 minutes. No data loss occurred.',
-                    resolved: true
-                },
-                {
-                    id: '3',
-                    severity: 'minor',
-                    title: 'Increased Error Rate',
-                    date: 'Apr 18, 2025',
-                    description: 'Temporary increase in API error rate due to network issues with our cloud provider. Service fully restored.',
-                    resolved: true
-                }
-            ]);
-
+            const data = await response.json();
+            setStatus(data);
             setLastRefreshed(new Date());
         } catch (err: any) {
             console.error('Error fetching status:', err);
-            setError(err.message || 'Failed to load system status');
+            setError(err.message || 'Failed to fetch system status');
         } finally {
             setLoading(false);
         }
     };
 
-    // Initial data fetch
+    // Check Ollama status
+    const checkOllamaStatus = async () => {
+        setRunningHealthCheck(true);
+        setHealthCheckResults(null);
+
+        try {
+            const response = await fetch('/api/check_ollama');
+
+            if (!response.ok) {
+                throw new Error(`Error checking Ollama: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            setHealthCheckResults({
+                success: data.status === 'available',
+                checks: {
+                    'LLM Service': data.status === 'available',
+                    'Models Available': data.models?.length > 0
+                },
+                models: data.models || [],
+                warnings: data.status !== 'available' ? ['Ollama service is not available'] : []
+            });
+        } catch (err: any) {
+            console.error('Error checking Ollama:', err);
+            setHealthCheckResults({
+                success: false,
+                checks: {
+                    'LLM Service': false
+                },
+                warnings: ['Error connecting to Ollama service']
+            });
+        } finally {
+            setRunningHealthCheck(false);
+        }
+    };
+
+    // Clear vector store cache
+    const clearVectorStore = async () => {
+        try {
+            const response = await fetch('/api/clear_documents', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            });
+
+            if (!response.ok) {
+                throw new Error(`Error clearing documents: ${response.statusText}`);
+            }
+
+            alert('Vector store cleared successfully');
+            fetchStatus(); // Refresh status
+        } catch (err: any) {
+            console.error('Error clearing vector store:', err);
+            alert(`Failed to clear vector store: ${err.message}`);
+        }
+    };
+
+    // Initial fetch of data
     useEffect(() => {
         fetchStatus();
 
-        // Optional: Set up auto-refresh every 30 seconds
+        // Optional: set up auto-refresh every 30 seconds
         const intervalId = setInterval(fetchStatus, 30000);
 
         // Clean up interval on component unmount
@@ -138,33 +123,21 @@ export default function StatusPanel() {
     }, []);
 
     // Status indicator component
-    const StatusIndicator = ({ status }: { status: 'online' | 'degraded' | 'offline' }) => {
+    const StatusIndicator = ({ status }: { status: 'available' | 'unavailable' }) => {
         const colors = {
-            online: 'bg-green-500',
-            degraded: 'bg-yellow-500',
-            offline: 'bg-red-500'
+            available: 'bg-green-500',
+            unavailable: 'bg-red-500'
         };
 
         return (
-            <span className="inline-flex items-center gap-2">
+            <div className="flex items-center gap-2">
                 <span className={`inline-block w-3 h-3 ${colors[status]} rounded-full`}></span>
                 <span className="capitalize">{status}</span>
-            </span>
+            </div>
         );
     };
 
-    // Severity indicator for incidents
-    const SeverityIndicator = ({ severity }: { severity: 'critical' | 'major' | 'minor' }) => {
-        const colors = {
-            critical: 'bg-red-500',
-            major: 'bg-orange-500',
-            minor: 'bg-yellow-500'
-        };
-
-        return <span className={`inline-block w-2 h-2 ${colors[severity]} rounded-full`}></span>;
-    };
-
-    if (loading && !systemStatus) {
+    if (loading && !status) {
         return (
             <div className="w-full max-w-4xl mx-auto">
                 <h1 className="text-2xl font-bold mb-6 text-gray-800 dark:text-white">System Status</h1>
@@ -218,275 +191,225 @@ export default function StatusPanel() {
                 </div>
             </div>
 
-            <div className="grid gap-6 md:grid-cols-2">
-                {/* Server Status */}
-                {systemStatus && (
-                    <div className="bg-white dark:bg-dark-3 rounded-lg shadow p-6">
-                        <div className="flex justify-between items-center mb-4">
-                            <h2 className="text-xl font-semibold flex items-center gap-2">
-                                Server Status
-                            </h2>
-                            <StatusIndicator status={systemStatus.server.status} />
-                        </div>
-
-                        <div className="space-y-4">
-                            <div className="flex justify-between">
-                                <span className="text-gray-600 dark:text-gray-400">Uptime</span>
-                                <span className="font-medium text-gray-800 dark:text-white">{systemStatus.server.uptime}</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="text-gray-600 dark:text-gray-400">Last Restart</span>
-                                <span className="font-medium text-gray-800 dark:text-white">{systemStatus.server.lastRestart}</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="text-gray-600 dark:text-gray-400">Current Load</span>
-                                <span className="font-medium text-gray-800 dark:text-white">{systemStatus.server.currentLoad}%</span>
-                            </div>
-                        </div>
-
-                        <div className="mt-5">
-                            <div className="relative pt-1">
-                                <div className="flex mb-2 items-center justify-between">
-                                    <div>
-                                        <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                                            Memory Usage
-                                        </span>
-                                    </div>
-                                    <div className="text-right">
-                                        <span className="text-sm font-medium text-gray-800 dark:text-white">
-                                            {systemStatus.server.memoryUsage}%
-                                        </span>
-                                    </div>
-                                </div>
-                                <div className="overflow-hidden h-2 mb-4 text-xs flex rounded bg-gray-200 dark:bg-gray-700">
-                                    <div
-                                        style={{ width: `${systemStatus.server.memoryUsage}%` }}
-                                        className={`shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center rounded ${systemStatus.server.memoryUsage > 90 ? 'bg-red-500' :
-                                                systemStatus.server.memoryUsage > 75 ? 'bg-yellow-500' : 'bg-blue-500'
-                                            }`}
-                                    ></div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* API Status */}
-                {systemStatus && (
-                    <div className="bg-white dark:bg-dark-3 rounded-lg shadow p-6">
-                        <div className="flex justify-between items-center mb-4">
-                            <h2 className="text-xl font-semibold flex items-center gap-2">
-                                API Status
-                            </h2>
-                            <StatusIndicator status={systemStatus.api.status} />
-                        </div>
-
-                        <div className="space-y-4">
-                            <div className="flex justify-between">
-                                <span className="text-gray-600 dark:text-gray-400">Response Time</span>
-                                <span className="font-medium text-gray-800 dark:text-white">{systemStatus.api.responseTime}</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="text-gray-600 dark:text-gray-400">Requests Today</span>
-                                <span className="font-medium text-gray-800 dark:text-white">
-                                    {systemStatus.api.requestsToday.toLocaleString()}
-                                </span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="text-gray-600 dark:text-gray-400">Error Rate</span>
-                                <span className="font-medium text-gray-800 dark:text-white">{systemStatus.api.errorRate}%</span>
-                            </div>
-                        </div>
-
-                        <div className="mt-5">
-                            <div className="relative pt-1">
-                                <div className="flex mb-2 items-center justify-between">
-                                    <div>
-                                        <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                                            API Usage
-                                        </span>
-                                    </div>
-                                    <div className="text-right">
-                                        <span className="text-sm font-medium text-gray-800 dark:text-white">
-                                            {systemStatus.api.usage}%
-                                        </span>
-                                    </div>
-                                </div>
-                                <div className="overflow-hidden h-2 mb-4 text-xs flex rounded bg-gray-200 dark:bg-gray-700">
-                                    <div
-                                        style={{ width: `${systemStatus.api.usage}%` }}
-                                        className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-green-500 rounded"
-                                    ></div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* Database Status */}
-                {systemStatus && (
-                    <div className="bg-white dark:bg-dark-3 rounded-lg shadow p-6">
-                        <div className="flex justify-between items-center mb-4">
-                            <h2 className="text-xl font-semibold flex items-center gap-2">
-                                Database Status
-                            </h2>
-                            <StatusIndicator status={systemStatus.database.status} />
-                        </div>
-
-                        <div className="space-y-4">
-                            <div className="flex justify-between">
-                                <span className="text-gray-600 dark:text-gray-400">Active Connections</span>
-                                <span className="font-medium text-gray-800 dark:text-white">{systemStatus.database.connections}</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="text-gray-600 dark:text-gray-400">Query Load</span>
-                                <span className="font-medium text-gray-800 dark:text-white">{systemStatus.database.queryLoad}%</span>
-                            </div>
-                        </div>
-
-                        <div className="mt-5">
-                            <div className="relative pt-1">
-                                <div className="flex mb-2 items-center justify-between">
-                                    <div>
-                                        <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                                            Query Load
-                                        </span>
-                                    </div>
-                                    <div className="text-right">
-                                        <span className="text-sm font-medium text-gray-800 dark:text-white">
-                                            {systemStatus.database.queryLoad}%
-                                        </span>
-                                    </div>
-                                </div>
-                                <div className="overflow-hidden h-2 mb-4 text-xs flex rounded bg-gray-200 dark:bg-gray-700">
-                                    <div
-                                        style={{ width: `${systemStatus.database.queryLoad}%` }}
-                                        className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-blue-500 rounded"
-                                    ></div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* Storage Status */}
-                {systemStatus && (
-                    <div className="bg-white dark:bg-dark-3 rounded-lg shadow p-6">
-                        <div className="flex justify-between items-center mb-4">
-                            <h2 className="text-xl font-semibold flex items-center gap-2">
-                                Storage Status
-                            </h2>
-                            <StatusIndicator status={systemStatus.storage.status} />
-                        </div>
-
-                        <div className="space-y-4">
-                            <div className="flex justify-between">
-                                <span className="text-gray-600 dark:text-gray-400">Total Space</span>
-                                <span className="font-medium text-gray-800 dark:text-white">{systemStatus.storage.totalSpace}</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="text-gray-600 dark:text-gray-400">Used Space</span>
-                                <span className="font-medium text-gray-800 dark:text-white">{systemStatus.storage.usedSpace}</span>
-                            </div>
-                        </div>
-
-                        <div className="mt-5">
-                            <div className="relative pt-1">
-                                <div className="flex mb-2 items-center justify-between">
-                                    <div>
-                                        <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                                            Storage Usage
-                                        </span>
-                                    </div>
-                                    <div className="text-right">
-                                        <span className="text-sm font-medium text-gray-800 dark:text-white">
-                                            {systemStatus.storage.usagePercent}%
-                                        </span>
-                                    </div>
-                                </div>
-                                <div className="overflow-hidden h-2 mb-4 text-xs flex rounded bg-gray-200 dark:bg-gray-700">
-                                    <div
-                                        style={{ width: `${systemStatus.storage.usagePercent}%` }}
-                                        className={`shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center rounded ${systemStatus.storage.usagePercent > 90 ? 'bg-red-500' :
-                                                systemStatus.storage.usagePercent > 75 ? 'bg-yellow-500' : 'bg-green-500'
-                                            }`}
-                                    ></div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
+            {/* Status Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div className={`px-4 py-3 rounded-md text-sm ${status?.llm_status === 'available' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                    {status?.llm_status === 'available' ? '✅ LLM Service: Online' : '❌ LLM Service: Offline'}
+                </div>
+                <div className={`px-4 py-3 rounded-md text-sm ${status?.embeddings_status === 'available' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                    {status?.embeddings_status === 'available' ? '✅ Embeddings: Online' : '❌ Embeddings: Offline'}
+                </div>
+                <div className="bg-blue-100 text-blue-800 px-4 py-3 rounded-md text-sm">
+                    📄 Documents: {status?.document_count || 0} loaded
+                </div>
+                <div className="bg-blue-100 text-blue-800 px-4 py-3 rounded-md text-sm">
+                    💾 Memory Usage: {status?.memory_usage || 'Normal'}
+                </div>
             </div>
 
-            {/* Recent Incidents */}
-            <div className="mt-8 bg-white dark:bg-dark-3 rounded-lg shadow p-6">
-                <h2 className="text-xl font-semibold mb-4">Recent Incidents</h2>
-
-                {incidents.length === 0 ? (
-                    <div className="py-8 text-center text-gray-500 dark:text-gray-400">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none"
-                            stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"
-                            className="mx-auto text-gray-400 mb-2">
-                            <path d="M18 6 6 18"></path>
-                            <path d="m6 6 12 12"></path>
-                        </svg>
-                        <p>No incidents reported in the last 30 days</p>
+            <div className="grid gap-6 md:grid-cols-2">
+                {/* LLM Status */}
+                <div className="bg-white dark:bg-dark-3 rounded-lg shadow p-6">
+                    <div className="flex justify-between items-center mb-4">
+                        <h2 className="text-xl font-semibold flex items-center gap-2">
+                            LLM Status
+                        </h2>
+                        <StatusIndicator status={status?.llm_status || 'unavailable'} />
                     </div>
-                ) : (
-                    <div className="divide-y divide-gray-200 dark:divide-gray-700">
-                        {incidents.map((incident) => (
-                            <div key={incident.id} className="py-4">
-                                <div className="flex items-center gap-2 mb-1">
-                                    <SeverityIndicator severity={incident.severity} />
-                                    <h3 className="font-medium text-gray-800 dark:text-white">{incident.title}</h3>
-                                    <span className="text-xs text-gray-500 dark:text-gray-400">{incident.date}</span>
-                                    {incident.resolved && (
-                                        <span className="ml-auto text-xs px-2 py-0.5 bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100 rounded-full">
-                                            Resolved
-                                        </span>
-                                    )}
-                                </div>
-                                <p className="text-sm text-gray-600 dark:text-gray-400 ml-4">{incident.description}</p>
+
+                    <div className="space-y-4">
+                        <div className="flex justify-between">
+                            <span className="text-gray-600 dark:text-gray-400">Current Model</span>
+                            <span className="font-medium text-gray-800 dark:text-white">{status?.current_model || 'mistral:latest'}</span>
+                        </div>
+                        <div className="flex justify-between">
+                            <span className="text-gray-600 dark:text-gray-400">Endpoint</span>
+                            <span className="font-medium text-gray-800 dark:text-white">http://localhost:11434</span>
+                        </div>
+                        <div className="flex justify-between">
+                            <span className="text-gray-600 dark:text-gray-400">API Type</span>
+                            <span className="font-medium text-gray-800 dark:text-white">Ollama</span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Embeddings Status */}
+                <div className="bg-white dark:bg-dark-3 rounded-lg shadow p-6">
+                    <div className="flex justify-between items-center mb-4">
+                        <h2 className="text-xl font-semibold flex items-center gap-2">
+                            Embeddings Status
+                        </h2>
+                        <StatusIndicator status={status?.embeddings_status || 'unavailable'} />
+                    </div>
+
+                    <div className="space-y-4">
+                        <div className="flex justify-between">
+                            <span className="text-gray-600 dark:text-gray-400">Model</span>
+                            <span className="font-medium text-gray-800 dark:text-white">ArabERT</span>
+                        </div>
+                        <div className="flex justify-between">
+                            <span className="text-gray-600 dark:text-gray-400">Dimension</span>
+                            <span className="font-medium text-gray-800 dark:text-white">768</span>
+                        </div>
+                        <div className="flex justify-between">
+                            <span className="text-gray-600 dark:text-gray-400">Location</span>
+                            <span className="font-medium text-gray-800 dark:text-white">Local (data/embeddings/arabert)</span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Vector Store Status */}
+                <div className="bg-white dark:bg-dark-3 rounded-lg shadow p-6">
+                    <div className="flex justify-between items-center mb-4">
+                        <h2 className="text-xl font-semibold flex items-center gap-2">
+                            Vector Store
+                        </h2>
+                        <div className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold bg-blue-50 text-blue-800 border-blue-200">
+                            FAISS
+                        </div>
+                    </div>
+
+                    <div className="space-y-4">
+                        <div className="flex justify-between">
+                            <span className="text-gray-600 dark:text-gray-400">Documents Indexed</span>
+                            <span className="font-medium text-gray-800 dark:text-white">
+                                {status?.vector_store_info?.documents || status?.document_count || 0}
+                            </span>
+                        </div>
+                        <div className="flex justify-between">
+                            <span className="text-gray-600 dark:text-gray-400">Embeddings</span>
+                            <span className="font-medium text-gray-800 dark:text-white">
+                                {status?.vector_store_info?.embeddings || status?.document_count || 0}
+                            </span>
+                        </div>
+                        <div className="flex justify-between">
+                            <span className="text-gray-600 dark:text-gray-400">Location</span>
+                            <span className="font-medium text-gray-800 dark:text-white">data/cache/vector_store</span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* System Info */}
+                <div className="bg-white dark:bg-dark-3 rounded-lg shadow p-6">
+                    <div className="flex justify-between items-center mb-4">
+                        <h2 className="text-xl font-semibold flex items-center gap-2">
+                            System Information
+                        </h2>
+                    </div>
+
+                    <div className="space-y-4">
+                        <div className="flex justify-between">
+                            <span className="text-gray-600 dark:text-gray-400">Operating System</span>
+                            <span className="font-medium text-gray-800 dark:text-white">
+                                {status?.system_info?.os || 'Linux/Windows/MacOS'}
+                            </span>
+                        </div>
+                        <div className="flex justify-between">
+                            <span className="text-gray-600 dark:text-gray-400">Python Version</span>
+                            <span className="font-medium text-gray-800 dark:text-white">
+                                {status?.system_info?.python_version || '3.9+'}
+                            </span>
+                        </div>
+                        <div className="flex justify-between">
+                            <span className="text-gray-600 dark:text-gray-400">App Version</span>
+                            <span className="font-medium text-gray-800 dark:text-white">
+                                {status?.system_info?.app_version || '1.0.0'}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Quick Health Check */}
+            <h2 className="text-lg font-semibold mt-8 mb-3">Quick Health Check</h2>
+
+            {runningHealthCheck ? (
+                <div className="space-y-4 bg-white dark:bg-dark-3 shadow rounded-md p-4 mb-6">
+                    <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
+                        <div className="bg-primary h-2.5 rounded-full animate-pulse" style={{ width: '100%' }}></div>
+                    </div>
+                    <p className="text-center">Running health check...</p>
+                </div>
+            ) : (
+                <button
+                    onClick={checkOllamaStatus}
+                    className="w-full bg-purple-500 hover:bg-purple-600 text-white rounded-md py-3 font-medium mb-6"
+                >
+                    Run Health Check
+                </button>
+            )}
+
+            {healthCheckResults && (
+                <div className="bg-white dark:bg-dark-3 shadow rounded-md p-4 mb-6">
+                    <h3 className="font-medium mb-2">
+                        {healthCheckResults.success ? 'All systems operational ✅' : 'Issues detected ⚠️'}
+                    </h3>
+
+                    <div className="space-y-2">
+                        {Object.entries(healthCheckResults.checks).map(([check, passed]: [string, any]) => (
+                            <div key={check} className="flex items-center gap-2">
+                                <span className={passed ? 'text-green-500' : 'text-red-500'}>
+                                    {passed ? '✓' : '✗'}
+                                </span>
+                                <span>{check}</span>
                             </div>
                         ))}
                     </div>
-                )}
-            </div>
+
+                    {healthCheckResults.models && healthCheckResults.models.length > 0 && (
+                        <div className="mt-4 bg-blue-50 dark:bg-blue-900/20 p-3 rounded-md">
+                            <h4 className="font-medium mb-1">Available Models:</h4>
+                            <div className="flex flex-wrap gap-2">
+                                {healthCheckResults.models.map((model: string, index: number) => (
+                                    <span key={index} className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold bg-blue-50 text-blue-800 border-blue-200">
+                                        {model}
+                                    </span>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {healthCheckResults.warnings && healthCheckResults.warnings.length > 0 && (
+                        <div className="mt-4 bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-md">
+                            <h4 className="font-medium mb-1">Warnings:</h4>
+                            <ul className="list-disc list-inside text-sm">
+                                {healthCheckResults.warnings.map((warning: string, index: number) => (
+                                    <li key={index}>{warning}</li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* System Actions */}
-            <div className="mt-8 bg-white dark:bg-dark-3 rounded-lg shadow p-6">
-                <h2 className="text-xl font-semibold mb-4">System Actions</h2>
+            <h2 className="text-lg font-semibold mb-3">System Actions</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+                <button
+                    onClick={fetchStatus}
+                    className="flex items-center justify-center gap-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md py-3"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="1 4 1 10 7 10"></polyline>
+                        <polyline points="23 20 23 14 17 14"></polyline>
+                        <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"></path>
+                    </svg>
+                    Refresh Status
+                </button>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <button className="flex items-center justify-center gap-2 px-4 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-md">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
-                            stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
-                            <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
-                            <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
-                        </svg>
-                        Run Diagnostics
-                    </button>
-
-                    <button className="flex items-center justify-center gap-2 px-4 py-3 bg-green-500 hover:bg-green-600 text-white rounded-md">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
-                            stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                            <circle cx="12" cy="7" r="4"></circle>
-                        </svg>
-                        Test Connections
-                    </button>
-
-                    <button className="flex items-center justify-center gap-2 px-4 py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-md">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
-                            stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <circle cx="12" cy="12" r="10"></circle>
-                            <line x1="12" y1="8" x2="12" y2="12"></line>
-                            <line x1="12" y1="16" x2="12.01" y2="16"></line>
-                        </svg>
-                        View System Logs
-                    </button>
-                </div>
+                <button
+                    onClick={clearVectorStore}
+                    className="flex items-center justify-center gap-2 bg-red-500 hover:bg-red-600 text-white rounded-md py-3"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                        <line x1="9" y1="9" x2="15" y2="15"></line>
+                        <line x1="15" y1="9" x2="9" y2="15"></line>
+                    </svg>
+                    Clear Vector Store
+                </button>
             </div>
         </div>
     );
