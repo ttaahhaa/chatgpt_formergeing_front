@@ -1,4 +1,6 @@
+// src/services/api.ts
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
 // Define types for API responses
 interface Document {
   id: string;
@@ -65,10 +67,19 @@ interface ChatResponse {
   conversation_id?: string;
 }
 
+interface Conversation {
+  id: string;
+  preview: string;
+  lastUpdated: string;
+  messageCount: number;
+}
+
+interface ConversationsResponse {
+  conversations: Conversation[];
+}
+
 // API service with methods for all operations
 export const api = {
-
-
   // Get all documents
   async getDocuments(): Promise<DocumentsResponse> {
     try {
@@ -86,26 +97,158 @@ export const api = {
     }
   },
 
-  async saveConversation(data: {
-    conversation_id: string;
-    preview: string;
-    history: any[];
-  }): Promise<{ status: string }> {
-    const response = await fetch(`${BASE_URL}/api/conversations/save`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(data),
-    });
-  
-    if (!response.ok) {
-      throw new Error("Failed to save conversation");
+  // Get all conversations
+  async getConversations(): Promise<ConversationsResponse> {
+    try {
+      const response = await fetch(`${BASE_URL}/api/conversations`);
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.message || `Failed to fetch conversations: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error: any) {
+      console.error('API error in getConversations:', error);
+      throw error;
     }
-  
-    return await response.json();
   },
 
+  // Get a specific conversation with its messages
+  async getConversation(conversationId: string): Promise<{
+    conversation_id: string;
+    messages: any[];
+    preview: string;
+    last_updated: string;
+  }> {
+    try {
+      console.log(`Calling API to get conversation: ${conversationId}`);
+      const response = await fetch(`${BASE_URL}/api/conversations/${conversationId}`);
+
+      console.log(`API response status: ${response.status}`);
+
+      // Parse response as text first to avoid JSON parsing errors
+      const responseText = await response.text();
+      console.log(`Response text length: ${responseText.length}`);
+
+      let data;
+      try {
+        // Now try to parse as JSON
+        data = JSON.parse(responseText);
+        console.log("Successfully parsed response as JSON");
+      } catch (parseError) {
+        console.error("Failed to parse response as JSON:", parseError);
+        console.log("Response text sample:", responseText.substring(0, 200));
+
+        // If we can't parse the response, throw an error
+        throw new Error(`Failed to parse conversation response: ${parseError}`);
+      }
+
+      // Check for error response
+      if (!response.ok) {
+        console.error("API returned error status with data:", data);
+        throw new Error(data.error || `Failed to fetch conversation: ${response.statusText}`);
+      }
+
+      // Log the response data structure
+      console.log(`Conversation data contains ${data.messages?.length || 0} messages`);
+
+      return data;
+    } catch (error: any) {
+      console.error(`API error in getConversation(${conversationId}):`, error);
+      throw error;
+    }
+  },
+
+  // Get conversation messages
+  async getConversationMessages(conversationId: string): Promise<{ messages: any[] }> {
+    try {
+      const response = await fetch(`${BASE_URL}/api/conversations/${conversationId}/messages`);
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.message || `Failed to fetch conversation messages: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error: any) {
+      console.error('API error in getConversationMessages:', error);
+      throw error;
+    }
+  },
+
+  // Save conversation
+  async saveConversation(data: {
+    conversation_id: string;
+    preview?: string;
+    history?: any[];
+  }): Promise<{ status: string }> {
+    try {
+      // Ensure preview and history exist
+      const payload = {
+        conversation_id: data.conversation_id,
+        preview: data.preview || "New Conversation",
+        messages: data.history || [], // Use "messages" key for consistency with backend
+        last_updated: new Date().toISOString() // Add timestamp
+      };
+
+      const response = await fetch(`${BASE_URL}/api/conversations/save`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error || "Failed to save conversation");
+      }
+
+      return await response.json();
+    } catch (error: any) {
+      console.error('API error in saveConversation:', error);
+      throw error;
+    }
+  },
+
+  // Create new conversation
+  async createNewConversation(): Promise<{ conversation_id: string }> {
+    try {
+      const response = await fetch(`${BASE_URL}/api/conversations/new`, {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.message || `Failed to create new conversation`);
+      }
+
+      return await response.json();
+    } catch (error: any) {
+      console.error('API error in createNewConversation:', error);
+      throw error;
+    }
+  },
+
+  // Clear all conversations
+  async clearAllConversations(): Promise<{ message: string }> {
+    try {
+      const response = await fetch(`${BASE_URL}/api/conversations/clear`, {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error || `Failed to clear conversations: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error: any) {
+      console.error('API error in clearAllConversations:', error);
+      throw error;
+    }
+  },
   // Upload a document
   async uploadDocument(file: File): Promise<Document> {
     try {
@@ -165,24 +308,6 @@ export const api = {
       return await response.json();
     } catch (error: any) {
       console.error('API error in deleteDocument:', error);
-      throw error;
-    }
-  },
-
-  async createNewConversation(): Promise<{ conversation_id: string }> {
-    try {
-      const response = await fetch(`${BASE_URL}/api/conversations/new`, {
-        method: 'POST',
-      });
-
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        throw new Error(error.message || `Failed to create new conversation`);
-      }
-
-      return await response.json();
-    } catch (error: any) {
-      console.error('API error in createNewConversation:', error);
       throw error;
     }
   },
@@ -278,7 +403,6 @@ export const api = {
     }
   },
 
-
   // Query the knowledge base
   async query(query: string): Promise<ChatResponse> {
     try {
@@ -302,4 +426,3 @@ export const api = {
     }
   }
 };
-

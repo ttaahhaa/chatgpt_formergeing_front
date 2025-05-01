@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect, useState } from "react";
 import { api } from "@/services/api";
 
@@ -8,6 +10,7 @@ export default function SettingsPanel() {
     const [selectedModel, setSelectedModel] = useState<string>("");
     const [message, setMessage] = useState<string>("");
     const [loading, setLoading] = useState(true);
+    const [clearingConversations, setClearingConversations] = useState(false);
 
     useEffect(() => {
         async function initialize() {
@@ -32,7 +35,7 @@ export default function SettingsPanel() {
 
     const handleModelChange = async () => {
         try {
-            await fetch(`${api.baseUrl}/api/set_model`, {
+            await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/set_model`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ model: selectedModel })
@@ -46,17 +49,62 @@ export default function SettingsPanel() {
 
     const clearData = async (type: "conversations" | "documents" | "cache") => {
         const endpoints = {
-            conversations: "/api/clear_context",
+            conversations: "/api/conversations/clear", // Use our new endpoint
             documents: "/api/clear_documents",
             cache: "/api/clear_cache",
         };
 
+        if (type === "conversations") {
+            // Confirm with the user before clearing conversations
+            if (!confirm("Are you sure you want to delete ALL conversations? This action cannot be undone.")) {
+                return;
+            }
+
+            setClearingConversations(true);
+        }
+
         try {
-            const res = await fetch(`${api.baseUrl}${endpoints[type]}`, { method: "POST" });
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}${endpoints[type]}`, {
+                method: "POST"
+            });
+
+            if (!res.ok) {
+                throw new Error(`Server returned ${res.status}: ${res.statusText}`);
+            }
+
             const data = await res.json();
-            setMessage(data.message || data.error);
-        } catch (error) {
-            setMessage("❌ Failed to clear " + type);
+
+            if (type === "conversations") {
+                // Clear local storage
+                localStorage.removeItem("selectedConversationId");
+
+                // Create a new conversation automatically
+                try {
+                    const newConvResult = await api.createNewConversation();
+                    if (newConvResult?.conversation_id) {
+                        localStorage.setItem("selectedConversationId", newConvResult.conversation_id);
+                    }
+                } catch (newConvErr) {
+                    console.error("Failed to create new conversation after clearing:", newConvErr);
+                }
+
+                // Set success message
+                setMessage("✅ All conversations cleared successfully. A new conversation has been created.");
+
+                // Reload the page after a short delay
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1500);
+            } else {
+                // For other types, just show the success message
+                setMessage(data.message || `✅ ${type} cleared successfully`);
+            }
+        } catch (error: any) {
+            setMessage(`❌ Failed to clear ${type}: ${error.message || error}`);
+        } finally {
+            if (type === "conversations") {
+                setClearingConversations(false);
+            }
         }
     };
 
@@ -98,16 +146,23 @@ export default function SettingsPanel() {
                     <div className="bg-white dark:bg-dark-3 p-6 rounded-lg shadow space-y-4">
                         <h3 className="text-xl font-semibold">💾 Data Management</h3>
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                            <button onClick={() => clearData("conversations")}
-                                className="bg-gray-100 dark:bg-dark-2 px-4 py-2 rounded border shadow hover:bg-gray-200">
-                                🧹 Clear Conversations
+                            <button
+                                onClick={() => clearData("conversations")}
+                                disabled={clearingConversations}
+                                className="bg-gray-100 dark:bg-dark-2 px-4 py-2 rounded border shadow hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {clearingConversations ? "Clearing..." : "🧹 Clear Conversations"}
                             </button>
-                            <button onClick={() => clearData("documents")}
-                                className="bg-gray-100 dark:bg-dark-2 px-4 py-2 rounded border shadow hover:bg-gray-200">
+                            <button
+                                onClick={() => clearData("documents")}
+                                className="bg-gray-100 dark:bg-dark-2 px-4 py-2 rounded border shadow hover:bg-gray-200"
+                            >
                                 🗂 Clear Documents
                             </button>
-                            <button onClick={() => clearData("cache")}
-                                className="bg-gray-100 dark:bg-dark-2 px-4 py-2 rounded border shadow hover:bg-gray-200">
+                            <button
+                                onClick={() => clearData("cache")}
+                                className="bg-gray-100 dark:bg-dark-2 px-4 py-2 rounded border shadow hover:bg-gray-200"
+                            >
                                 🚮 Clear Cache
                             </button>
                         </div>
