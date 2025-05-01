@@ -5,6 +5,7 @@ import { api } from "@/services/api";
 import ReactMarkdown from "react-markdown";
 import { SearchIcon } from "@/assets/icons";
 import ChatBubble from "@/components/Chat/ChatBubble";
+import TextareaAutosize from 'react-textarea-autosize';
 interface Message {
     role: 'user' | 'assistant';
     content: string;
@@ -12,7 +13,10 @@ interface Message {
     sources?: { document: string; relevance: number }[];
 }
 
+
+
 export default function ChatTab({ conversationId }: { conversationId: string | null }) {
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
     const [messages, setMessages] = useState<Message[]>([]);
     const [inputValue, setInputValue] = useState("");
     const [loading, setLoading] = useState(false);
@@ -118,8 +122,8 @@ export default function ChatTab({ conversationId }: { conversationId: string | n
     }, [conversationId]); // Only depend on conversationId, not messages
 
     // Handle message submission
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleSubmit = async (e?: React.FormEvent) => {
+        if (e) e.preventDefault();
 
         if (!inputValue.trim()) {
             return;
@@ -133,7 +137,6 @@ export default function ChatTab({ conversationId }: { conversationId: string | n
         const userMessage = inputValue;
         setInputValue('');
 
-        // Add user message to chat
         const newUserMessage: Message = {
             role: 'user',
             content: userMessage,
@@ -145,13 +148,11 @@ export default function ChatTab({ conversationId }: { conversationId: string | n
         setError(null);
 
         try {
-            // Prepare conversation context
             const context = messages.map(m => ({
                 role: m.role,
                 content: m.content
             }));
 
-            // Send message to API
             const response = await api.chat({
                 message: userMessage,
                 conversation_id: conversationId,
@@ -163,7 +164,6 @@ export default function ChatTab({ conversationId }: { conversationId: string | n
                 throw new Error("Received empty response from assistant");
             }
 
-            // Add assistant response to chat
             const assistantMessage: Message = {
                 role: 'assistant',
                 content: response.response,
@@ -173,7 +173,6 @@ export default function ChatTab({ conversationId }: { conversationId: string | n
 
             setMessages(prev => [...prev, assistantMessage]);
 
-            // Save conversation and store preview in localStorage for reference
             const preview = userMessage.slice(0, 50) + (userMessage.length > 50 ? "..." : "");
             localStorage.setItem(`conversation_preview_${conversationId}`, preview);
 
@@ -331,13 +330,21 @@ export default function ChatTab({ conversationId }: { conversationId: string | n
             {/* Input form */}
             <form onSubmit={handleSubmit} className="w-full mx-auto pb-4">
                 <div className="relative flex items-center">
-                    <input
-                        type="text"
+                    <TextareaAutosize
+                        ref={textareaRef}
                         value={inputValue}
                         onChange={(e) => setInputValue(e.target.value)}
                         placeholder="Ask anything..."
                         disabled={loading || !conversationId || isLoadingConversation}
-                        className="w-full rounded-full border border-gray-300 bg-white py-4 pl-[60px] pr-[60px] text-lg outline-none shadow-md focus:border-primary focus:ring-2 focus:ring-primary dark:border-dark-3 dark:bg-dark-2 dark:text-white"
+                        minRows={1}
+                        maxRows={8}
+                        onKeyDown={(e) => {
+                            if (e.key === "Enter" && !e.shiftKey) {
+                                e.preventDefault(); // prevent newline
+                                handleSubmit(e);     // replace this with your actual send function
+                            }
+                        }}
+                        className="w-full rounded-xl border border-gray-300 bg-white py-4 pl-[60px] pr-[60px] text-lg outline-none shadow-md focus:border-primary focus:ring-2 focus:ring-primary dark:border-dark-3 dark:bg-dark-2 dark:text-white resize-none overflow-y-auto"
                     />
                     <div className="absolute left-6 top-1/2 -translate-y-1/2">
                         <SearchIcon className="size-6 text-gray-500 dark:text-gray-400" />

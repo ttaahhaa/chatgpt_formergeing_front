@@ -27,6 +27,7 @@
     "react-dropzone": "^14.3.8",
     "react-markdown": "^10.1.0",
     "react-syntax-highlighter": "^15.6.1",
+    "react-textarea-autosize": "^8.5.9",
     "rehype-highlight": "^7.0.2",
     "tailwind-merge": "^2.6.0"
   },
