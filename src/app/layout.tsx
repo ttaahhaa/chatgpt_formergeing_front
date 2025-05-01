@@ -1,16 +1,13 @@
+// src/app/layout.tsx (no "use client" here!)
 import "@/css/satoshi.css";
 import "@/css/style.css";
-
-import { Sidebar } from "@/components/Layouts/sidebar";
-
 import "flatpickr/dist/flatpickr.min.css";
 import "jsvectormap/dist/jsvectormap.css";
 
-import { Header } from "@/components/Layouts/header";
 import type { Metadata } from "next";
-import NextTopLoader from "nextjs-toploader";
-import type { PropsWithChildren } from "react";
 import { Providers } from "./providers";
+import NextTopLoader from "nextjs-toploader";
+import { ClientRootLayout } from "./client-wrapper"; // 👈 use client wrapper here
 
 export const metadata: Metadata = {
   title: {
@@ -21,24 +18,13 @@ export const metadata: Metadata = {
     "Next.js admin dashboard toolkit with 200+ templates, UI components, and integrations for fast dashboard development.",
 };
 
-export default function RootLayout({ children }: PropsWithChildren) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <body>
         <Providers>
           <NextTopLoader color="#5750F1" showSpinner={false} />
-
-          <div className="flex min-h-screen">
-            <Sidebar />
-
-            <div className="w-full bg-gray-2 dark:bg-[#020d1a]">
-              <Header />
-
-              <main className="w-full h-full">
-                {children}
-              </main>
-            </div>
-          </div>
+          <ClientRootLayout>{children}</ClientRootLayout>
         </Providers>
       </body>
     </html>

@@ -1,5 +1,5 @@
 "use client"
-
+import { api } from '@/services/api';
 import { useState, useEffect } from 'react';
 
 // Define types for API responses
@@ -29,21 +29,17 @@ export default function StatusPanel() {
     const [healthCheckResults, setHealthCheckResults] = useState<any>(null);
     const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
 
+    // API base URL
+    const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
     // Fetch status from the API
     const fetchStatus = async () => {
         setLoading(true);
         setError(null);
 
         try {
-            // Call our API endpoint
-            const response = await fetch('/api/status');
-
-            if (!response.ok) {
-                throw new Error(`Error fetching status: ${response.statusText}`);
-            }
-
-            const data = await response.json();
-            setStatus(data);
+            const statusData = await api.getStatus();
+            setStatus(statusData);
             setLastRefreshed(new Date());
         } catch (err: any) {
             console.error('Error fetching status:', err);
@@ -59,21 +55,16 @@ export default function StatusPanel() {
         setHealthCheckResults(null);
 
         try {
-            const response = await fetch('/api/check_ollama');
+            const ollamaStatus = await api.checkOllama();
 
-            if (!response.ok) {
-                throw new Error(`Error checking Ollama: ${response.statusText}`);
-            }
-
-            const data = await response.json();
             setHealthCheckResults({
-                success: data.status === 'available',
+                success: ollamaStatus.status === 'available',
                 checks: {
-                    'LLM Service': data.status === 'available',
-                    'Models Available': data.models?.length > 0
+                    'LLM Service': ollamaStatus.status === 'available',
+                    'Models Available': (ollamaStatus.models || []).length > 0
                 },
-                models: data.models || [],
-                warnings: data.status !== 'available' ? ['Ollama service is not available'] : []
+                models: ollamaStatus.models || [],
+                warnings: ollamaStatus.status !== 'available' ? ['Ollama service is not available'] : []
             });
         } catch (err: any) {
             console.error('Error checking Ollama:', err);
@@ -92,17 +83,7 @@ export default function StatusPanel() {
     // Clear vector store cache
     const clearVectorStore = async () => {
         try {
-            const response = await fetch('/api/clear_documents', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-            });
-
-            if (!response.ok) {
-                throw new Error(`Error clearing documents: ${response.statusText}`);
-            }
-
+            await api.clearDocuments();
             alert('Vector store cleared successfully');
             fetchStatus(); // Refresh status
         } catch (err: any) {
@@ -110,6 +91,7 @@ export default function StatusPanel() {
             alert(`Failed to clear vector store: ${err.message}`);
         }
     };
+
 
     // Initial fetch of data
     useEffect(() => {
@@ -155,6 +137,7 @@ export default function StatusPanel() {
                 <div className="bg-red-100 text-red-700 p-6 rounded-lg">
                     <h2 className="text-lg font-semibold mb-2">Error Loading Status</h2>
                     <p>{error}</p>
+                    <p className="text-sm text-gray-700 mt-2">Make sure the API server is running at <code>{api.baseUrl}</code></p>
                     <button
                         onClick={fetchStatus}
                         className="mt-4 px-4 py-2 bg-red-200 hover:bg-red-300 text-red-800 rounded-md"
