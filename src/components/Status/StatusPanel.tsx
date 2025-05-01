@@ -137,7 +137,9 @@ export default function StatusPanel() {
                 <div className="bg-red-100 text-red-700 p-6 rounded-lg">
                     <h2 className="text-lg font-semibold mb-2">Error Loading Status</h2>
                     <p>{error}</p>
-                    <p className="text-sm text-gray-700 mt-2">Make sure the API server is running at <code>{api.baseUrl}</code></p>
+                    <p className="text-sm text-gray-700 mt-2">
+                        Make sure the API server is running at <code>{process.env.NEXT_PUBLIC_API_URL}</code>
+                    </p>
                     <button
                         onClick={fetchStatus}
                         className="mt-4 px-4 py-2 bg-red-200 hover:bg-red-300 text-red-800 rounded-md"

@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { api } from "@/services/api";
 import ReactMarkdown from "react-markdown";
 import { SearchIcon } from "@/assets/icons";
-
+import ChatBubble from "@/components/Chat/ChatBubble";
 interface Message {
     role: 'user' | 'assistant';
     content: string;
@@ -285,9 +285,7 @@ export default function ChatTab({ conversationId }: { conversationId: string | n
                                     : "bg-white dark:bg-dark-3 dark:text-white"
                                     }`}
                             >
-                                <div className="prose dark:prose-invert max-w-none">
-                                    <ReactMarkdown>{message.content}</ReactMarkdown>
-                                </div>
+                                <ChatBubble message={message.content} isUser={message.role === "user"} />
 
                                 {message.sources && message.sources.length > 0 && (
                                     <div className="mt-3 border-t pt-2 text-xs">
