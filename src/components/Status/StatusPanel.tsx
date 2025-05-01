@@ -150,7 +150,7 @@ export default function StatusPanel() {
     }
 
     return (
-        <div className="w-full max-w-4xl mx-auto">
+        <div className="flex-1 overflow-y-auto w-full max-w-4xl mx-auto px-6 py-8 pb-32" style={{ height: "100%" }}>
             <div className="flex justify-between items-center mb-6">
                 <h1 className="text-2xl font-bold text-gray-800 dark:text-white">System Status</h1>
 

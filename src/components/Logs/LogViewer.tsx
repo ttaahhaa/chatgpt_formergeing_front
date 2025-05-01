@@ -116,7 +116,8 @@ export function LogViewer() {
     }
 
     return (
-        <div className="w-full max-w-4xl mx-auto overflow-y-auto h-full">
+        <div
+            className="flex-1 overflow-y-auto w-full max-w-4xl mx-auto px-6 py-8 pb-32" style={{ height: "100%" }}>
             <div className="space-y-6">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8 text-center">
                     <div className="bg-white dark:bg-dark-3 p-4 rounded-lg shadow">

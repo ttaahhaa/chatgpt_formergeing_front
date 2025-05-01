@@ -66,6 +66,7 @@ export default function Home() {
 
   // Listen for selected conversation changes
   useEffect(() => {
+    // Handler for localStorage changes (from other tabs)
     const handleStorageChange = () => {
       const savedConversationId = localStorage.getItem("selectedConversationId");
       if (savedConversationId && savedConversationId !== selectedConversationId) {
@@ -73,10 +74,21 @@ export default function Home() {
       }
     };
 
+    // Handler for custom events (from within the same tab)
+    const handleConversationChange = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      if (customEvent.detail && customEvent.detail.id) {
+        setSelectedConversationId(customEvent.detail.id);
+      }
+    };
+
+    // Set up event listeners
     window.addEventListener("storage", handleStorageChange);
+    window.addEventListener("conversation-changed", handleConversationChange);
 
     return () => {
       window.removeEventListener("storage", handleStorageChange);
+      window.removeEventListener("conversation-changed", handleConversationChange);
     };
   }, [selectedConversationId]);
 

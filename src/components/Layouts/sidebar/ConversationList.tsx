@@ -27,7 +27,7 @@ export default function ConversationList({
     // Fetch conversations from API when component mounts or selectedId changes
     useEffect(() => {
         fetchConversations();
-    }, [selectedId]); // Re-fetch when selectedId changes to update the list
+    }, []);  // Only fetch on mount, don't refetch on selectedId changes
 
     // Function to fetch conversations
     const fetchConversations = async () => {
@@ -53,23 +53,28 @@ export default function ConversationList({
         }
     };
 
-    // Create new conversation and save current one
+    // Create new conversation
     const handleNewConversation = async () => {
         try {
             setError(null);
 
-            // Create new conversation directly without trying to save current one
-            // This avoids errors when the current conversation might have been deleted
+            const currentId = localStorage.getItem("selectedConversationId");
+            if (currentId) {
+                const currentConv = await api.getConversation(currentId);
+
+                const hasMessages = Array.isArray(currentConv.messages) && currentConv.messages.length > 0;
+                if (!hasMessages) {
+                    // Do not create a new conversation if the current one is empty
+                    console.log("Current conversation is empty. Reusing it instead of creating a new one.");
+                    return;
+                }
+            }
+
             const result = await api.createNewConversation();
 
             if (result?.conversation_id) {
-                // Save it in localStorage
                 localStorage.setItem("selectedConversationId", result.conversation_id);
-
-                // Select the new conversation
                 onSelectConversation(result.conversation_id);
-
-                // Refresh conversation list
                 fetchConversations();
             }
         } catch (err: any) {
@@ -77,6 +82,7 @@ export default function ConversationList({
             setError(err.message || "Failed to create new conversation");
         }
     };
+
 
     // Clear all conversations
     const handleClearAllConversations = async () => {
@@ -111,6 +117,17 @@ export default function ConversationList({
         } finally {
             setClearingConversations(false);
         }
+    };
+
+    // Handle conversation selection
+    const handleSelectConversation = async (id: string) => {
+        if (id === selectedId) return; // Skip if already selected
+
+        // Just pass the ID to the parent component
+        onSelectConversation(id);
+
+        // Refresh the conversation list to ensure it's up-to-date
+        fetchConversations();
     };
 
     return (
@@ -151,10 +168,10 @@ export default function ConversationList({
                     conversations.map((conv) => (
                         <button
                             key={conv.id}
-                            onClick={() => onSelectConversation(conv.id)}
+                            onClick={() => handleSelectConversation(conv.id)}
                             className={`w-full text-left rounded-md px-3 py-2.5 mb-1 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors ${selectedId === conv.id
-                                    ? "bg-gray-200 dark:bg-gray-700 border-l-2 border-primary"
-                                    : ""
+                                ? "bg-gray-200 dark:bg-gray-700 border-l-2 border-primary"
+                                : ""
                                 }`}
                         >
                             <div className="flex flex-col">

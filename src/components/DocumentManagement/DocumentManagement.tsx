@@ -15,14 +15,18 @@ export default function DocumentManagement() {
   };
 
   return (
-    <div className="w-full max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold mb-6 text-gray-800 dark:text-white">Document Management</h1>
+    <div className="flex flex-col h-full w-full">
+      <div className="flex-1 overflow-y-auto w-full max-w-4xl mx-auto px-6 py-8 pb-32" style={{ height: "100%" }}>
+        <h1 className="text-2xl font-bold mb-6 text-gray-800 dark:text-white">
+          Document Management
+        </h1>
 
-      {/* Document Upload Section */}
-      <DocumentUpload onUploadComplete={handleUploadComplete} />
+        {/* Upload Section */}
+        <DocumentUpload onUploadComplete={handleUploadComplete} />
 
-      {/* Document List Section */}
-      <DocumentList key={refreshTrigger} />
+        {/* List Section */}
+        <DocumentList key={refreshTrigger} />
+      </div>
     </div>
   );
 }
