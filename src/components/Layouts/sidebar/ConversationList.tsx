@@ -98,10 +98,14 @@ export default function ConversationList({
             // Call the API to clear all conversations
             await api.clearAllConversations();
 
-            // Clear local storage
-            localStorage.removeItem("selectedConversationId");
+            // Clear local storage entries related to conversations
+            Object.keys(localStorage).forEach(key => {
+                if (key === "selectedConversationId" || key.startsWith("conversation_preview_")) {
+                    localStorage.removeItem(key);
+                }
+            });
 
-            // Refresh the conversation list
+            // Reset the conversations list
             setConversations([]);
 
             // Create a new conversation automatically after clearing
@@ -109,9 +113,8 @@ export default function ConversationList({
                 await handleNewConversation();
             } catch (newConvErr) {
                 console.error("Failed to create new conversation after clearing:", newConvErr);
-                // If we fail to create a new conversation, at least we've cleared the old ones
             }
-        } catch (err: any) {
+        } catch (err: any) { // Add type annotation here
             console.error("Failed to clear conversations:", err);
             setError(err.message || "Failed to clear conversations");
         } finally {
