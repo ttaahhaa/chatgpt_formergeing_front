@@ -1,5 +1,4 @@
 // src/app/layout.tsx (no "use client" here!)
-import "@/css/satoshi.css";
 import "@/css/style.css";
 import "flatpickr/dist/flatpickr.min.css";
 import "jsvectormap/dist/jsvectormap.css";
