@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import ChatTab from "@/components/Chat/ChatTab";
+import StreamingChatTab from "@/components/Chat/StreamingChatTab";
 import DocumentManagement from "@/components/DocumentManagement/DocumentManagement";
 import SettingsPanel from "@/components/Settings/SettingsPanel";
 import { LogViewer } from "@/components/Logs/LogViewer";
@@ -124,7 +124,7 @@ export default function Home() {
                 </div>
               </div>
             ) : (
-              <ChatTab conversationId={selectedConversationId} />
+              <StreamingChatTab conversationId={selectedConversationId} />
             )}
           </div>
           <div className={activeTab === "documents" ? "block" : "hidden"}>

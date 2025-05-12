@@ -67,6 +67,33 @@ interface ChatResponse {
   conversation_id?: string;
 }
 
+// Define streaming chat request interface
+interface StreamingChatRequest {
+  message: string;
+  conversation_id?: string;
+  mode?: 'auto' | 'documents_only' | 'general_knowledge';
+}
+
+// Define streaming response type
+interface StreamingData {
+  token?: string;
+  done?: boolean;
+  sources?: any[];
+  error?: string;
+}
+
+// Define callback types for streaming
+type OnTokenCallback = (token: string) => void;
+type OnCompleteCallback = (sources: any[]) => void;
+type OnErrorCallback = (error: string) => void;
+
+interface StreamChatResponse {
+  token?: string;
+  error?: string;
+  done?: boolean;
+  sources?: { document: string; relevance: number; content?: string; page?: number }[];
+}
+
 interface Conversation {
   id: string;
   preview: string;
@@ -399,6 +426,190 @@ export const api = {
       return await response.json();
     } catch (error: any) {
       console.error('API error in chat:', error);
+      throw error;
+    }
+  },
+
+  // Add streaming chat method
+  async streamChat(
+    request: StreamingChatRequest,
+    callbacks: {
+      onToken?: OnTokenCallback;
+      onComplete?: OnCompleteCallback;
+      onError?: OnErrorCallback;
+    }
+  ): Promise<void> {
+    try {
+      const response = await fetch(`${BASE_URL}/api/chat/stream`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(request),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      // Handle streaming response
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (!reader) {
+        throw new Error("No response body");
+      }
+
+      try {
+        let done = false;
+
+        while (!done) {
+          const { value, done: readerDone } = await reader.read();
+          done = readerDone;
+
+          if (value) {
+            const chunk = decoder.decode(value);
+            const lines = chunk.split('\n');
+
+            for (const line of lines) {
+              if (line.trim() === '') continue;
+
+              if (line.startsWith('data: ')) {
+                const data = line.slice(6);
+
+                if (data === '[DONE]') {
+                  done = true;
+                  break;
+                }
+
+                try {
+                  const parsed: StreamingData = JSON.parse(data);
+
+                  if (parsed.token && callbacks.onToken) {
+                    callbacks.onToken(parsed.token);
+                  } else if (parsed.done && callbacks.onComplete) {
+                    callbacks.onComplete(parsed.sources || []);
+                    done = true;
+                  } else if (parsed.error && callbacks.onError) {
+                    callbacks.onError(parsed.error);
+                    done = true;
+                  }
+                } catch (parseError) {
+                  console.error("Error parsing SSE data:", parseError);
+                }
+              }
+            }
+          }
+        }
+      } finally {
+        reader.releaseLock();
+      }
+    } catch (error: any) {
+      console.error('Streaming API error:', error);
+      if (callbacks.onError) {
+        callbacks.onError(error.message || 'Failed to stream chat response');
+      }
+      throw error;
+    }
+  },
+
+  // Add method to create abort controller
+  createAbortController(): { controller: AbortController; signal: AbortSignal } {
+    const controller = new AbortController();
+    return { controller, signal: controller.signal };
+  },
+
+  // Modified streaming chat method with abort support
+  async streamChatWithAbort(
+    request: StreamingChatRequest,
+    callbacks: {
+      onToken?: OnTokenCallback;
+      onComplete?: OnCompleteCallback;
+      onError?: OnErrorCallback;
+    },
+    signal?: AbortSignal
+  ): Promise<void> {
+    try {
+      const response = await fetch(`${BASE_URL}/api/chat/stream`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(request),
+        signal, // Add abort signal
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      // Handle streaming response with abort support
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (!reader) {
+        throw new Error("No response body");
+      }
+
+      try {
+        let done = false;
+
+        while (!done && !signal?.aborted) {
+          const { value, done: readerDone } = await reader.read();
+          done = readerDone;
+
+          if (value) {
+            const chunk = decoder.decode(value);
+            const lines = chunk.split('\n');
+
+            for (const line of lines) {
+              if (line.trim() === '') continue;
+
+              if (line.startsWith('data: ')) {
+                const data = line.slice(6);
+
+                if (data === '[DONE]') {
+                  done = true;
+                  break;
+                }
+
+                try {
+                  const parsed: StreamingData = JSON.parse(data);
+
+                  if (parsed.token && callbacks.onToken) {
+                    callbacks.onToken(parsed.token);
+                  } else if (parsed.done && callbacks.onComplete) {
+                    callbacks.onComplete(parsed.sources || []);
+                    done = true;
+                  } else if (parsed.error && callbacks.onError) {
+                    callbacks.onError(parsed.error);
+                    done = true;
+                  }
+                } catch (parseError) {
+                  console.error("Error parsing SSE data:", parseError);
+                }
+              }
+            }
+          }
+        }
+
+        // Handle abort
+        if (signal?.aborted) {
+          reader.cancel();
+          throw new Error('Stream cancelled');
+        }
+      } finally {
+        reader.releaseLock();
+      }
+    } catch (error: any) {
+      console.error('Streaming API error:', error);
+      if (error.name === 'AbortError') {
+        if (callbacks.onError) {
+          callbacks.onError('Request was cancelled');
+        }
+      } else if (callbacks.onError) {
+        callbacks.onError(error.message || 'Failed to stream chat response');
+      }
       throw error;
     }
   },
