@@ -6,6 +6,7 @@ import DocumentManagement from "@/components/DocumentManagement/DocumentManageme
 import SettingsPanel from "@/components/Settings/SettingsPanel";
 import { LogViewer } from "@/components/Logs/LogViewer";
 import StatusPanel from "@/components/Status/StatusPanel";
+import ProtectedRoute from "@/components/Auth/ProtectedRoute";
 import { api } from "@/services/api";
 import "@/css/page.css";
 
@@ -92,7 +93,7 @@ export default function Home() {
     };
   }, [selectedConversationId]);
 
-  return (
+  const HomeContent = () => (
     <div className="flex h-screen overflow-hidden bg-gray-50 dark:bg-gray-900">
       {/* Main content */}
       <div className="flex flex-col flex-1">
@@ -142,5 +143,11 @@ export default function Home() {
         </div>
       </div>
     </div>
+  );
+
+  return (
+    <ProtectedRoute>
+      <HomeContent />
+    </ProtectedRoute>
   );
 }

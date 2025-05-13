@@ -34,7 +34,7 @@ type DropdownProps = {
 };
 
 export function Dropdown({ children, isOpen, setIsOpen }: DropdownProps) {
-  const triggerRef = useRef<HTMLElement>(null);
+  const triggerRef = useRef<HTMLElement | null>(null);
 
   const handleKeyDown = (event: React.KeyboardEvent) => {
     if (event.key === "Escape") {
@@ -44,14 +44,20 @@ export function Dropdown({ children, isOpen, setIsOpen }: DropdownProps) {
 
   useEffect(() => {
     if (isOpen) {
-      triggerRef.current = document.activeElement as HTMLElement;
+      // Safely handle document.activeElement with type checking
+      const activeElement = document.activeElement;
+      if (activeElement instanceof HTMLElement) {
+        triggerRef.current = activeElement;
+      }
 
       document.body.style.pointerEvents = "none";
     } else {
       document.body.style.removeProperty("pointer-events");
 
       setTimeout(() => {
-        triggerRef.current?.focus();
+        if (triggerRef.current) {
+          triggerRef.current.focus();
+        }
       }, 0);
     }
   }, [isOpen]);
