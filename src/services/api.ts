@@ -110,7 +110,12 @@ export const api = {
   // Get all documents
   async getDocuments(): Promise<DocumentsResponse> {
     try {
-      const response = await fetch(`${BASE_URL}/api/documents`);
+      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      const response = await fetch(`${BASE_URL}/api/documents`, {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
@@ -127,7 +132,12 @@ export const api = {
   // Get all conversations
   async getConversations(): Promise<ConversationsResponse> {
     try {
-      const response = await fetch(`${BASE_URL}/api/conversations`);
+      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      const response = await fetch(`${BASE_URL}/api/conversations`, {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
@@ -149,36 +159,28 @@ export const api = {
     last_updated: string;
   }> {
     try {
-      console.log(`Calling API to get conversation: ${conversationId}`);
-      const response = await fetch(`${BASE_URL}/api/conversations/${conversationId}`);
-
-      console.log(`API response status: ${response.status}`);
+      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      const response = await fetch(`${BASE_URL}/api/conversations/${conversationId}`, {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
 
       // Parse response as text first to avoid JSON parsing errors
       const responseText = await response.text();
-      console.log(`Response text length: ${responseText.length}`);
 
       let data;
       try {
         // Now try to parse as JSON
         data = JSON.parse(responseText);
-        console.log("Successfully parsed response as JSON");
       } catch (parseError) {
-        console.error("Failed to parse response as JSON:", parseError);
-        console.log("Response text sample:", responseText.substring(0, 200));
-
-        // If we can't parse the response, throw an error
         throw new Error(`Failed to parse conversation response: ${parseError}`);
       }
 
       // Check for error response
       if (!response.ok) {
-        console.error("API returned error status with data:", data);
         throw new Error(data.error || `Failed to fetch conversation: ${response.statusText}`);
       }
-
-      // Log the response data structure
-      console.log(`Conversation data contains ${data.messages?.length || 0} messages`);
 
       return data;
     } catch (error: any) {
@@ -190,7 +192,12 @@ export const api = {
   // Get conversation messages
   async getConversationMessages(conversationId: string): Promise<{ messages: any[] }> {
     try {
-      const response = await fetch(`${BASE_URL}/api/conversations/${conversationId}/messages`);
+      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      const response = await fetch(`${BASE_URL}/api/conversations/${conversationId}/messages`, {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
@@ -211,6 +218,7 @@ export const api = {
     history?: any[];
   }): Promise<{ status: string }> {
     try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
       // Ensure preview and history exist
       const payload = {
         conversation_id: data.conversation_id,
@@ -223,6 +231,7 @@ export const api = {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify(payload),
       });
@@ -242,8 +251,12 @@ export const api = {
   // Create new conversation
   async createNewConversation(): Promise<{ conversation_id: string }> {
     try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
       const response = await fetch(`${BASE_URL}/api/conversations/new`, {
         method: 'POST',
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
       });
 
       if (!response.ok) {
@@ -261,8 +274,12 @@ export const api = {
   // Clear all conversations
   async clearAllConversations(): Promise<{ message: string }> {
     try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
       const response = await fetch(`${BASE_URL}/api/conversations/clear`, {
         method: 'POST',
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
       });
 
       if (!response.ok) {
@@ -282,8 +299,12 @@ export const api = {
       const formData = new FormData();
       formData.append('file', file);
 
+      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
       const response = await fetch(`${BASE_URL}/api/upload`, {
         method: 'POST',
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: formData,
       });
 
@@ -317,13 +338,17 @@ export const api = {
   },
 
   // Delete a single document
-  async deleteDocument(filename: string): Promise<{ message: string }> {
+  async deleteDocument(documentId: string): Promise<{ message: string }> {
     try {
       const formData = new FormData();
-      formData.append('filename', filename);
+      formData.append('document_id', documentId);
 
+      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
       const response = await fetch(`${BASE_URL}/api/delete_document`, {
         method: 'POST',
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: formData,
       });
 

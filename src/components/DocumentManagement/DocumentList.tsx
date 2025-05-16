@@ -34,10 +34,10 @@ export function DocumentList() {
         }
     };
 
-    const handleDelete = async (filename: string) => {
+    const handleDelete = async (id: string) => {
         try {
-            await api.deleteDocument(filename);
-            setDocuments(prev => prev.filter(d => d.filename !== filename));
+            await api.deleteDocument(id);
+            setDocuments(prev => prev.filter(d => d.id !== id));
         } catch (err: any) {
             console.error("Error deleting document:", err);
             setError(err.message || "Failed to delete document");
@@ -137,7 +137,7 @@ export function DocumentList() {
                                             Preview
                                         </button>
                                         <button
-                                            onClick={() => handleDelete(doc.filename)}
+                                            onClick={() => handleDelete(doc.id)}
                                             className="text-sm text-red-600 hover:underline"
                                         >
                                             Delete

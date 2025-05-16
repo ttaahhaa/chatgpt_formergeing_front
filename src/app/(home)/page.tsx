@@ -7,18 +7,12 @@ import SettingsPanel from "@/components/Settings/SettingsPanel";
 import { LogViewer } from "@/components/Logs/LogViewer";
 import StatusPanel from "@/components/Status/StatusPanel";
 import { api } from "@/services/api";
+import { useTab } from "@/contexts/TabContext";
 import "@/css/page.css";
-
-const tabs = [
-  { id: "chats", label: "Chat" },
-  { id: "documents", label: "Documents" },
-  { id: "settings", label: "Settings" },
-  { id: "logs", label: "Logs" },
-  { id: "status", label: "Status" },
-];
+import ProtectedRoute from '@/components/ProtectedRoute';
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState("chats");
+  const { activeTab, setActiveTab } = useTab();
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [initializing, setInitializing] = useState(true);
 
@@ -57,7 +51,7 @@ export default function Home() {
   useEffect(() => {
     const savedTab = localStorage.getItem("active_tab");
     if (savedTab) setActiveTab(savedTab);
-  }, []);
+  }, [setActiveTab]);
 
   // Save active tab to localStorage when it changes
   useEffect(() => {
@@ -93,54 +87,26 @@ export default function Home() {
   }, [selectedConversationId]);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-50 dark:bg-gray-900">
-      {/* Main content */}
-      <div className="flex flex-col flex-1">
-        {/* Tab navigation */}
-        <div className="flex justify-center py-4 gap-4 bg-white dark:bg-gray-800 shadow-sm">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`text-sm font-medium px-4 py-2 rounded-md transition ${activeTab === tab.id
-                ? "bg-primary bg-opacity-10 text-primary"
-                : "text-gray-700 hover:text-primary dark:text-white dark:hover:text-primary"
-                }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Tab content */}
-        <div className="flex-1 overflow-y-auto">
-          <div className={activeTab === "chats" ? "block h-full" : "hidden"}>
+    <ProtectedRoute>
+      <div className="flex-1 overflow-hidden">
+        {activeTab === "chats" && (
+          <div className={initializing ? "flex items-center justify-center h-full" : "h-full"}>
             {initializing ? (
-              <div className="flex items-center justify-center h-full">
-                <div className="flex items-center space-x-2">
-                  <div className="w-4 h-4 bg-primary rounded-full animate-bounce"></div>
-                  <div className="w-4 h-4 bg-primary rounded-full animate-bounce" style={{ animationDelay: "0.2s" }}></div>
-                  <div className="w-4 h-4 bg-primary rounded-full animate-bounce" style={{ animationDelay: "0.4s" }}></div>
-                </div>
+              <div className="flex items-center space-x-2">
+                <div className="w-4 h-4 bg-primary rounded-full animate-bounce"></div>
+                <div className="w-4 h-4 bg-primary rounded-full animate-bounce" style={{ animationDelay: "0.2s" }}></div>
+                <div className="w-4 h-4 bg-primary rounded-full animate-bounce" style={{ animationDelay: "0.4s" }}></div>
               </div>
             ) : (
               <StreamingChatTab conversationId={selectedConversationId} />
             )}
           </div>
-          <div className={activeTab === "documents" ? "block" : "hidden"}>
-            <DocumentManagement />
-          </div>
-          <div className={activeTab === "settings" ? "block" : "hidden"}>
-            <SettingsPanel />
-          </div>
-          <div className={activeTab === "logs" ? "block" : "hidden"}>
-            <LogViewer />
-          </div>
-          <div className={activeTab === "status" ? "block" : "hidden"}>
-            <StatusPanel />
-          </div>
-        </div>
+        )}
+        {activeTab === "documents" && <DocumentManagement />}
+        {activeTab === "settings" && <SettingsPanel />}
+        {activeTab === "logs" && <LogViewer />}
+        {activeTab === "status" && <StatusPanel />}
       </div>
-    </div>
+    </ProtectedRoute>
   );
 }

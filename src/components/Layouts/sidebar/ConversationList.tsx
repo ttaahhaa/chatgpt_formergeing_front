@@ -35,8 +35,14 @@ export default function ConversationList({
             setLoading(true);
             setError(null);
 
+            const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
             const response = await fetch(
-                `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/conversations`
+                `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/conversations`,
+                {
+                    headers: {
+                        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                    },
+                }
             );
 
             if (!response.ok) {

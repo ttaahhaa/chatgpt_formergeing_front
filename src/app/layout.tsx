@@ -6,7 +6,7 @@ import "jsvectormap/dist/jsvectormap.css";
 import type { Metadata } from "next";
 import { Providers } from "./providers";
 import NextTopLoader from "nextjs-toploader";
-import { ClientRootLayout } from "./client-wrapper"; // 👈 use client wrapper here
+import { ClientRootLayout } from "./client-wrapper";
 
 export const metadata: Metadata = {
   title: {
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body>
+      <body suppressHydrationWarning>
         <Providers>
           <NextTopLoader color="#5750F1" showSpinner={false} />
           <ClientRootLayout>{children}</ClientRootLayout>
