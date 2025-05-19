@@ -4,12 +4,14 @@ interface LoginCredentials {
 }
 
 interface UserInfo {
+  id: string;
   username: string;
   email: string;
   role: string;
   permissions: string[];
   name: string;
   img: string;
+  created_at: string;
 }
 
 class AuthService {
@@ -21,6 +23,15 @@ class AuthService {
     // Initialize token from localStorage if it exists and we're in the browser
     if (typeof window !== 'undefined') {
       this.token = localStorage.getItem('token');
+      // Try to restore user info from localStorage
+      const savedUserInfo = localStorage.getItem('userInfo');
+      if (savedUserInfo) {
+        try {
+          this.userInfo = JSON.parse(savedUserInfo);
+        } catch (e) {
+          console.error('Failed to parse saved user info:', e);
+        }
+      }
     }
   }
 
@@ -49,7 +60,8 @@ class AuthService {
 
     const data = await response.json();
     this.setToken(data.access_token);
-    await this.fetchUserInfo();
+    const userInfo = await this.fetchUserInfo();
+    console.log('User info after login:', userInfo);
   }
 
   async fetchUserInfo(): Promise<UserInfo> {
@@ -64,8 +76,27 @@ class AuthService {
     }
 
     const data = await response.json();
-    this.userInfo = data;
-    return data;
+
+    // Ensure permissions array exists and has default permissions based on role
+    const permissions = data.permissions || [];
+    if (data.role === 'admin') {
+      permissions.push('admin', 'chat:stream', 'documents:upload');
+    }
+
+    const userInfo: UserInfo = {
+      ...data,
+      permissions: [...new Set(permissions)] // Remove duplicates
+    };
+
+    this.userInfo = userInfo;
+
+    // Save user info to localStorage
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('userInfo', JSON.stringify(userInfo));
+    }
+
+    console.log('Fetched user info:', userInfo);
+    return userInfo;
   }
 
   setToken(token: string) {
@@ -88,6 +119,7 @@ class AuthService {
     this.userInfo = null;
     if (typeof window !== 'undefined') {
       localStorage.removeItem('token');
+      localStorage.removeItem('userInfo');
     }
   }
 

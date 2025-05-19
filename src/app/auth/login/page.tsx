@@ -1,16 +1,14 @@
 "use client";
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import AuthService from '@/services/auth';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function LoginPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
-  const auth = AuthService.getInstance();
+  const { login } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -18,8 +16,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      await auth.login({ username, password });
-      router.push('/');
+      await login(username, password);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {

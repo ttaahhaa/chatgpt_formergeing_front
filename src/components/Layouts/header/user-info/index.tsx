@@ -14,6 +14,9 @@ import { LogOutIcon, SettingsIcon, UserIcon } from "./icons";
 import { useRouter } from 'next/navigation';
 import AuthService from '@/services/auth';
 
+// Default avatar image - using local SVG
+const DEFAULT_AVATAR = "/images/default-avatar.svg";
+
 export function UserInfo() {
   const [isOpen, setIsOpen] = useState(false);
   const router = useRouter();
@@ -32,12 +35,13 @@ export function UserInfo() {
 
         <figure className="flex items-center gap-3">
           <Image
-            src={userInfo?.img || ""}
-            className="size-12"
+            src={userInfo?.img || DEFAULT_AVATAR}
+            className="size-12 rounded-full"
             alt={`Avatar for ${userInfo?.name || "User"}`}
             role="presentation"
             width={200}
             height={200}
+            priority
           />
           <figcaption className="flex items-center gap-1 font-medium text-dark dark:text-dark-6 max-[1024px]:sr-only">
             <span>{userInfo?.name || 'User'}</span>
@@ -62,12 +66,13 @@ export function UserInfo() {
 
         <figure className="flex items-center gap-2.5 px-5 py-3.5">
           <Image
-            src={userInfo?.img || ""}
-            className="size-12"
+            src={userInfo?.img || DEFAULT_AVATAR}
+            className="size-12 rounded-full"
             alt={`Avatar for ${userInfo?.name || "User"}`}
             role="presentation"
             width={200}
             height={200}
+            priority
           />
 
           <figcaption className="space-y-1 text-base font-medium">
