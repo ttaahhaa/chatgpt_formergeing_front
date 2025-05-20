@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api } from '@/services/api';
+import { api } from "@/services/api";
 
 export default function SettingsPanel() {
     const [ollamaStatus, setOllamaStatus] = useState("loading");
@@ -35,11 +35,7 @@ export default function SettingsPanel() {
 
     const handleModelChange = async () => {
         try {
-            await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/set_model`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ model: selectedModel })
-            });
+            await api.setModel({ model: selectedModel });
             setMessage(`✅ Model updated to ${selectedModel}`);
             setCurrentModel(selectedModel);
         } catch (error) {
@@ -48,56 +44,35 @@ export default function SettingsPanel() {
     };
 
     const clearData = async (type: "conversations" | "documents" | "cache") => {
-        const endpoints = {
-            conversations: "/api/conversations/clear", // Use our new endpoint
-            documents: "/api/clear_documents",
-            cache: "/api/clear_cache",
-        };
-
         if (type === "conversations") {
-            // Confirm with the user before clearing conversations
             if (!confirm("Are you sure you want to delete ALL conversations? This action cannot be undone.")) {
                 return;
             }
-
             setClearingConversations(true);
         }
 
         try {
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}${endpoints[type]}`, {
-                method: "POST"
-            });
-
-            if (!res.ok) {
-                throw new Error(`Server returned ${res.status}: ${res.statusText}`);
-            }
-
-            const data = await res.json();
-
-            if (type === "conversations") {
-                // Clear local storage
-                localStorage.removeItem("selectedConversationId");
-
-                // Create a new conversation automatically
-                try {
+            switch (type) {
+                case "conversations":
+                    await api.clearAllConversations();
+                    localStorage.removeItem("selectedConversationId");
                     const newConvResult = await api.createNewConversation();
                     if (newConvResult?.conversation_id) {
                         localStorage.setItem("selectedConversationId", newConvResult.conversation_id);
                     }
-                } catch (newConvErr) {
-                    console.error("Failed to create new conversation after clearing:", newConvErr);
-                }
-
-                // Set success message
-                setMessage("✅ All conversations cleared successfully. A new conversation has been created.");
-
-                // Reload the page after a short delay
-                setTimeout(() => {
-                    window.location.reload();
-                }, 1500);
-            } else {
-                // For other types, just show the success message
-                setMessage(data.message || `✅ ${type} cleared successfully`);
+                    setMessage("✅ All conversations cleared successfully. A new conversation has been created.");
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1500);
+                    break;
+                case "documents":
+                    await api.clearDocuments();
+                    setMessage("✅ Documents cleared successfully");
+                    break;
+                case "cache":
+                    // Note: There's no direct API call for clearing cache in the current API
+                    setMessage("⚠️ Cache clearing not implemented in API");
+                    break;
             }
         } catch (error: any) {
             setMessage(`❌ Failed to clear ${type}: ${error.message || error}`);

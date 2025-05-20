@@ -4,6 +4,7 @@ import * as documents from './documents';
 import * as conversation from './conversation';
 import * as status from './status';
 import * as logs from './logs';
+import * as settings from './settings';
 
 // Define shared types
 export interface ChatRequest {
@@ -112,5 +113,9 @@ export const api = {
             console.error('API error in query:', error);
             throw error;
         }
-    }
+    },
+
+    // Settings
+    getModels: settings.getModels,
+    setModel: settings.setModel,
 };

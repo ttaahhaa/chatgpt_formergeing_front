@@ -42,14 +42,14 @@ export default function TabPage({ params }: { params: { tab: string } }) {
         if (!isMounted) return;
 
         const authService = AuthService.getInstance();
-        
+
         try {
             const userInfo = authService.getUserInfo();
 
             const newPermissions = {
                 canAccessChat: authService.hasPermission('chat:stream'),
                 canAccessDocuments: authService.hasPermission('documents:upload'),
-                canAccessSettings: authService.hasPermission('admin'),
+                canAccessSettings: authService.hasPermission('settings:view'),
                 canAccessLogs: authService.hasPermission('admin'),
                 canAccessStatus: authService.hasPermission('admin')
             };

@@ -23,7 +23,7 @@ const tabs = [
   {
     id: "settings",
     label: "Settings",
-    permission: "admin"
+    permission: "settings:view"
   },
   {
     id: "logs",
