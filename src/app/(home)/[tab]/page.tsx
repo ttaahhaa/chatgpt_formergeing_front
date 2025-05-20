@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useEffect, useCallback, memo } from "react";
+import { useSearchParams } from "next/navigation";
 import StreamingChatTab from "@/components/Chat/StreamingChatTab";
 import DocumentManagement from "@/components/DocumentManagement/DocumentManagement";
 import SettingsPanel from "@/components/Settings/SettingsPanel";
 import { LogViewer } from "@/components/Logs/LogViewer";
 import StatusPanel from "@/components/Status/StatusPanel";
 import ProtectedRoute from '@/components/ProtectedRoute';
-import { notFound } from 'next/navigation';
+import { notFound, useRouter } from 'next/navigation';
 import AuthService from '@/services/auth';
 import { ChatProvider } from "@/contexts/ChatContext";
 
@@ -16,6 +17,8 @@ const validTabIds = ['chats', 'documents', 'settings', 'logs', 'status'] as cons
 type TabId = typeof validTabIds[number];
 
 const TabPage = memo(function TabPage({ params }: { params: { tab: string } }) {
+    const searchParams = useSearchParams();
+    const router = useRouter();
     const tab = params.tab as TabId;
     const [isLoading, setIsLoading] = useState(true);
     const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
@@ -31,6 +34,24 @@ const TabPage = memo(function TabPage({ params }: { params: { tab: string } }) {
     if (!validTabIds.includes(tab)) {
         notFound();
     }
+
+    // Get conversation ID from URL if present
+    useEffect(() => {
+        const conversationIdFromUrl = searchParams.get('conversationId');
+        if (conversationIdFromUrl) {
+            setCurrentConversationId(conversationIdFromUrl);
+            // Store as last active
+            localStorage.setItem('lastActiveConversationId', conversationIdFromUrl);
+        } else if (tab === 'chats') {
+            // If on chats tab but no ID in URL, check localStorage
+            const lastActiveId = localStorage.getItem('lastActiveConversationId');
+            if (lastActiveId) {
+                setCurrentConversationId(lastActiveId);
+                // Update URL to include the conversation ID
+                router.replace(`/chats?conversationId=${lastActiveId}`);
+            }
+        }
+    }, [searchParams, tab, router]);
 
     useEffect(() => {
         const authService = AuthService.getInstance();
@@ -50,7 +71,9 @@ const TabPage = memo(function TabPage({ params }: { params: { tab: string } }) {
 
     const handleConversationChange = useCallback((newConversationId: string) => {
         setCurrentConversationId(newConversationId);
-    }, []);
+        // Update URL with the new conversation ID
+        router.replace(`/chats?conversationId=${newConversationId}`);
+    }, [router]);
 
     if (isLoading) {
         return (
@@ -81,7 +104,7 @@ const TabPage = memo(function TabPage({ params }: { params: { tab: string } }) {
                             <div className="text-center">
                                 <h2 className="text-2xl font-semibold mb-3">Access Denied</h2>
                                 <p className="text-gray-600 dark:text-gray-400">
-                                    You don't have permission to access the chat feature.
+                                    You don&apos;t have permission to access the chat feature.
                                 </p>
                             </div>
                         </div>
@@ -95,7 +118,7 @@ const TabPage = memo(function TabPage({ params }: { params: { tab: string } }) {
                             <div className="text-center">
                                 <h2 className="text-2xl font-semibold mb-3">Access Denied</h2>
                                 <p className="text-gray-600 dark:text-gray-400">
-                                    You don't have permission to access the documents feature.
+                                    You don&apos;t have permission to access the documents feature.
                                 </p>
                             </div>
                         </div>
@@ -109,4 +132,4 @@ const TabPage = memo(function TabPage({ params }: { params: { tab: string } }) {
     );
 });
 
-export default TabPage; 
+export default TabPage;

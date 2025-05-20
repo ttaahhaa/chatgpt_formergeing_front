@@ -1,7 +1,7 @@
 // src/components/Logs/LogViewer.tsx
 "use client"
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { api } from '@/services/api';
 
 function extractDateFromFilename(filename: string): Date {
@@ -27,11 +27,7 @@ export function LogViewer() {
     const [searchTerm, setSearchTerm] = useState('');
     const [logLevels, setLogLevels] = useState(['ERROR', 'WARNING', 'INFO', 'DEBUG']);
 
-    useEffect(() => {
-        fetchLogs();
-    }, []);
-
-    const fetchLogs = async () => {
+    const fetchLogs = useCallback(async () => {
         setLoading(true);
         setError(null);
 
@@ -56,7 +52,11 @@ export function LogViewer() {
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
+
+    useEffect(() => {
+        fetchLogs();
+    }, [fetchLogs]);
 
     const fetchLogContent = async (filename: string) => {
         if (!filename) return;

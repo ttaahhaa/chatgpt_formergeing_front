@@ -52,64 +52,21 @@ export default function ChatTab({ conversationId }: { conversationId: string | n
 
     // Handle conversation ID changes
     useEffect(() => {
-        // If this is the first render or no change in conversation ID, do nothing
-        if (!conversationId || previousConversationIdRef.current === conversationId) {
-            previousConversationIdRef.current = conversationId;
-            return;
-        }
-
-        console.log("Conversation ID change detected", {
-            previous: previousConversationIdRef.current,
-            current: conversationId
-        });
-
         const handleConversationChange = async () => {
-            // Immediately set loading state and clear messages to prevent UI confusion
-            setIsLoadingConversation(true);
-            setMessages([]);
-            setError(null);
-
-            // Save the previous conversation if there was one
-            const prevId = previousConversationIdRef.current;
-            if (prevId && prevId !== conversationId) {
-                try {
-                    // Fetch current messages from the component state
-                    const currentMessages = document.querySelectorAll('[data-message-container]');
-                    if (currentMessages.length > 0) {
-                        console.log(`Saving previous conversation: ${prevId}`);
-                        // Use any existing user message as preview
-                        const messageToPreview = localStorage.getItem(`conversation_preview_${prevId}`) || "New Conversation";
-                        const userMessages = messages.filter(m => m.role === "user");
-                        const lastUserMessage = userMessages[userMessages.length - 1]?.content || "New Conversation";
-
-                        await api.saveConversation({
-                            conversation_id: prevId,
-                            preview: lastUserMessage.slice(0, 50),
-                            history: [...messages] // Save actual message history
-                        });
-                        console.log("Previous conversation referenced successfully");
-                    }
-                } catch (err) {
-                    console.error("Failed to save previous conversation:", err);
-                    // Continue with loading the new conversation even if saving failed
-                }
+            if (!conversationId) {
+                setMessages([]);
+                return;
             }
 
-            // Now load the new conversation
             try {
-                console.log(`Loading conversation: ${conversationId}`);
-                const data = await api.getConversation(conversationId);
-
-                if (Array.isArray(data.messages)) {
-                    console.log(`Setting ${data.messages.length} messages from conversation`);
-                    setMessages(data.messages);
-                } else {
-                    console.warn("No messages array in response");
-                    setMessages([]);
+                setIsLoadingConversation(true);
+                const response = await api.getConversation(conversationId);
+                if (response.messages) {
+                    setMessages(response.messages);
                 }
-            } catch (err: any) {
+            } catch (err) {
                 console.error("Error loading conversation:", err);
-                setError(`Failed to load conversation: ${err.message}`);
+                setError("Failed to load conversation");
             } finally {
                 setIsLoadingConversation(false);
             }
@@ -119,7 +76,7 @@ export default function ChatTab({ conversationId }: { conversationId: string | n
         };
 
         handleConversationChange();
-    }, [conversationId]); // Only depend on conversationId, not messages
+    }, [conversationId, messages]); // Include messages in dependencies
 
     // Handle message submission
     const handleSubmit = async (e?: React.FormEvent) => {

@@ -10,11 +10,10 @@ import { ClientRootLayout } from "./client-wrapper";
 
 export const metadata: Metadata = {
   title: {
-    template: "%s | NextAdmin - Next.js Dashboard Kit",
-    default: "NextAdmin - Next.js Dashboard Kit",
+    template: "%s | Saudi Interpol",
+    default: "Saudi Interpol",
   },
-  description:
-    "Next.js admin dashboard toolkit with 200+ templates, UI components, and integrations for fast dashboard development.",
+  description: "Saudi Interpol Chat Assistant",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

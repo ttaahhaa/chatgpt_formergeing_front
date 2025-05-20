@@ -1,8 +1,9 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import AuthService from '@/services/auth';
 import { useRouter } from 'next/navigation';
+import { api } from '@/services/api';
 
 interface AuthContextType {
     role: string | null;
@@ -31,7 +32,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const router = useRouter();
     const auth = AuthService.getInstance();
 
-    const updateAuthState = async () => {
+    const updateAuthState = useCallback(async () => {
         try {
             if (auth.isAuthenticated()) {
                 const userInfo = await auth.fetchUserInfo();
@@ -65,12 +66,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 userInfo: null
             }));
         }
-    };
+    }, [auth]);
 
     // Initialize auth state
     useEffect(() => {
         updateAuthState();
-    }, []);
+    }, [updateAuthState]);
 
     // Listen for auth changes
     useEffect(() => {
@@ -82,12 +83,51 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return () => {
             window.removeEventListener('storage', handleStorageChange);
         };
-    }, []);
+    }, [updateAuthState]);
+
+    const createInitialConversation = async () => {
+        try {
+            // Check if user has chat permissions
+            if (!auth.hasPermission('chat:stream')) {
+                return;
+            }
+
+            console.log('Creating initial conversation after login');
+            const result = await api.createNewConversation();
+
+            if (result?.conversation_id) {
+                // Store the conversation ID for future use
+                localStorage.setItem('lastActiveConversationId', result.conversation_id);
+
+                // Create welcome message
+                const welcomeMessage = {
+                    role: 'assistant',
+                    content: 'Welcome to the Saudi Interpol Chat Assistant. How can I help you today?',
+                    timestamp: new Date().toISOString()
+                };
+
+                // Save conversation with welcome message
+                await api.saveConversation({
+                    conversation_id: result.conversation_id,
+                    preview: 'Welcome to Chat Assistant',
+                    history: [welcomeMessage]
+                });
+
+                console.log('Initial conversation created successfully:', result.conversation_id);
+            }
+        } catch (err) {
+            console.error('Failed to create initial conversation after login:', err);
+        }
+    };
 
     const login = async (username: string, password: string) => {
         try {
             await auth.login({ username, password });
             await updateAuthState();
+
+            // Create initial conversation after successful login
+            await createInitialConversation();
+
             router.push('/');
         } catch (error) {
             console.error('Login failed:', error);
@@ -98,6 +138,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const logout = () => {
         auth.logout();
         updateAuthState();
+
+        // Clear conversation-related storage on logout
+        Object.keys(localStorage).forEach(key => {
+            if (key === 'lastActiveConversationId' || key.startsWith('conversation_preview_')) {
+                localStorage.removeItem(key);
+            }
+        });
+
         router.push('/auth/login');
     };
 
@@ -121,4 +169,4 @@ export function useAuth() {
         throw new Error('useAuth must be used within an AuthProvider');
     }
     return context;
-} 
+}

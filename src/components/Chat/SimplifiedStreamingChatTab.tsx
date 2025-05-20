@@ -17,7 +17,7 @@ interface Message {
 
 interface RetryPayload {
     message: string;
-    conversationId?: string;
+    conversationId?: string | null;
 }
 
 // Typing indicator component for streaming messages
@@ -248,27 +248,7 @@ const StreamingChatTab = memo(function StreamingChatTab({
                 localStorage.setItem('lastActiveConversationId', conversationId);
             } catch (err: any) {
                 console.error("StreamingChatTab: Error loading conversation:", err);
-
-                if (err.message && err.message.includes("not found")) {
-                    // Conversation not found - remove it from localStorage
-                    localStorage.removeItem('lastActiveConversationId');
-
-                    // Trigger creation of a new conversation
-                    window.dispatchEvent(new CustomEvent('conversationNotFound', {
-                        detail: { conversationId }
-                    }));
-
-                    // Show a more helpful error message
-                    dispatch({
-                        type: 'SET_ERROR',
-                        payload: 'This conversation no longer exists. A new one will be created.'
-                    });
-                } else {
-                    dispatch({
-                        type: 'SET_ERROR',
-                        payload: `Failed to load conversation: ${err.message}`
-                    });
-                }
+                dispatch({ type: 'SET_ERROR', payload: `Failed to load conversation: ${err.message}` });
             } finally {
                 setIsLoadingConversation(false);
             }
@@ -295,11 +275,6 @@ const StreamingChatTab = memo(function StreamingChatTab({
 
                 // Store as last active conversation
                 localStorage.setItem('lastActiveConversationId', result.conversation_id);
-
-                // Dispatch event to notify other components about the new conversation
-                window.dispatchEvent(new CustomEvent('conversationCreated', {
-                    detail: { conversationId: result.conversation_id }
-                }));
             }
         } catch (err) {
             console.error("Failed to create new conversation:", err);
@@ -308,6 +283,12 @@ const StreamingChatTab = memo(function StreamingChatTab({
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
+            // Escape key to cancel streaming
+            if (e.key === 'Escape' && state.isStreaming && abortControllerRef.current) {
+                abortControllerRef.current.abort();
+                dispatch({ type: 'SET_STREAMING', payload: false });
+            }
+
             // Ctrl+N to create new conversation
             if (e.ctrlKey && e.key === 'n') {
                 e.preventDefault();
@@ -318,20 +299,6 @@ const StreamingChatTab = memo(function StreamingChatTab({
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [state.isStreaming, dispatch, handleNewConversation]);
-
-    // Keyboard shortcuts
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            // Escape key to cancel streaming
-            if (e.key === 'Escape' && state.isStreaming && abortControllerRef.current) {
-                abortControllerRef.current.abort();
-                dispatch({ type: 'SET_STREAMING', payload: false });
-            }
-        };
-
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [state.isStreaming, dispatch]);
 
     // Handle error recovery
     const handleStreamError = useCallback((error: string) => {

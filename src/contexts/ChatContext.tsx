@@ -1,6 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useReducer, useCallback } from 'react';
+import { api } from '@/services/api';
 
 interface Message {
     role: 'user' | 'assistant';
@@ -40,6 +41,8 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         case 'ADD_MESSAGE':
             return { ...state, messages: [...state.messages, action.payload] };
         case 'UPDATE_LAST_MESSAGE':
+            if (state.messages.length === 0) return state;
+            
             const updatedMessages = [...state.messages];
             const lastMessage = updatedMessages[updatedMessages.length - 1];
             if (lastMessage) {
@@ -59,16 +62,75 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
     }
 }
 
-const ChatContext = createContext<{
+interface ChatContextValue {
     state: ChatState;
     dispatch: React.Dispatch<ChatAction>;
-} | null>(null);
+    persistConversation: (conversationId: string, messages: Message[]) => Promise<void>;
+}
+
+const ChatContext = createContext<ChatContextValue | null>(null);
 
 export function ChatProvider({ children }: { children: React.ReactNode }) {
     const [state, dispatch] = useReducer(chatReducer, initialState);
 
+    // Function to save conversation to the server and localStorage
+    const persistConversation = useCallback(async (conversationId: string, messages: Message[]) => {
+        if (!conversationId || messages.length === 0) return;
+        
+        try {
+            // Find the last user message to use as preview
+            const userMessages = messages.filter(m => m.role === 'user');
+            const lastUserMessage = userMessages[userMessages.length - 1]?.content || 'New Conversation';
+            const preview = lastUserMessage.slice(0, 50) + (lastUserMessage.length > 50 ? '...' : '');
+            
+            // Save to API
+            await api.saveConversation({
+                conversation_id: conversationId,
+                preview,
+                history: messages
+            });
+            
+            // Store the last active conversation ID for session restoration
+            localStorage.setItem('lastActiveConversationId', conversationId);
+            localStorage.setItem(`conversation_preview_${conversationId}`, preview);
+            
+            console.log('Conversation saved successfully:', conversationId);
+        } catch (err) {
+            console.error('Failed to persist conversation:', err);
+        }
+    }, []);
+
+    // Add window unload handler to save conversation before closing
+    React.useEffect(() => {
+        const handleBeforeUnload = () => {
+            if (state.currentConversationId && state.messages.length > 0) {
+                // For beforeunload, we need to use synchronous localStorage backup
+                // instead of async API call that might not complete
+                try {
+                    const userMessages = state.messages.filter(m => m.role === 'user');
+                    const lastUserMessage = userMessages[userMessages.length - 1]?.content || 'New Conversation';
+                    const preview = lastUserMessage.slice(0, 50) + (lastUserMessage.length > 50 ? '...' : '');
+                    
+                    // Store conversation in localStorage as backup
+                    localStorage.setItem(`conversation_backup_${state.currentConversationId}`, 
+                      JSON.stringify({
+                        messages: state.messages,
+                        preview,
+                        timestamp: new Date().toISOString()
+                      })
+                    );
+                } catch (err) {
+                    console.error('Failed to backup conversation to localStorage:', err);
+                }
+            }
+        };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }, [state.currentConversationId, state.messages]);
+
     return (
-        <ChatContext.Provider value={{ state, dispatch }}>
+        <ChatContext.Provider value={{ state, dispatch, persistConversation }}>
             {children}
         </ChatContext.Provider>
     );
@@ -80,4 +142,4 @@ export function useChat() {
         throw new Error('useChat must be used within a ChatProvider');
     }
     return context;
-} 
+}

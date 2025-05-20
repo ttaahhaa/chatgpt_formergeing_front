@@ -23,7 +23,7 @@ export default function ProtectedRoute({ children, requiredPermission }: Protect
       router.push('/unauthorized');
       return;
     }
-  }, [requiredPermission]);
+  }, [requiredPermission, auth, router]);
 
   return <>{children}</>;
 } 
