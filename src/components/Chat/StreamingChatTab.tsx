@@ -284,40 +284,92 @@ const StreamingChatTab = memo(function StreamingChatTab({
         if (state.isStreaming) return;
 
         try {
-            // Save current conversation first
+            // Save current conversation first if it exists and has messages
             if (conversationId && state.messages.length > 0) {
                 await persistConversation(conversationId, state.messages);
             }
 
-            const result = await api.createNewConversation();
-            if (result?.conversation_id && onConversationChange) {
-                onConversationChange(result.conversation_id);
+            // Clear messages immediately for better UX
+            dispatch({ type: 'CLEAR_MESSAGES' });
+            dispatch({ type: 'SET_ERROR', payload: null });
+            setRetryPayload(null);
 
-                // Store as last active conversation
+            // Show loading indicator
+            setIsLoadingConversation(true);
+
+            // Create new conversation
+            const result = await api.createNewConversation();
+            if (result?.conversation_id) {
+                console.log("New conversation created:", result.conversation_id);
+
+                // Update localStorage
                 localStorage.setItem('lastActiveConversationId', result.conversation_id);
 
-                // Dispatch event to notify other components about the new conversation
+                // Reset component state
+                previousConversationIdRef.current = result.conversation_id;
+                streamingMessageRef.current = "";
+
+                // Fire event to update sidebar BEFORE changing the conversation
                 window.dispatchEvent(new CustomEvent('conversationCreated', {
                     detail: { conversationId: result.conversation_id }
                 }));
+
+                // Navigate to the new conversation (this will trigger URL/route change)
+                if (onConversationChange) {
+                    onConversationChange(result.conversation_id);
+                }
             }
         } catch (err) {
             console.error("Failed to create new conversation:", err);
+            dispatch({ type: 'SET_ERROR', payload: 'Failed to create new conversation. Please try again.' });
+        } finally {
+            setIsLoadingConversation(false);
         }
-    }, [state.isStreaming, state.messages, conversationId, onConversationChange, persistConversation]);
+    }, [state.isStreaming, state.messages, conversationId, onConversationChange, persistConversation, dispatch]);
 
+    // Add event listeners for conversation management
     useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            // Ctrl+N to create new conversation
-            if (e.ctrlKey && e.key === 'n') {
-                e.preventDefault();
-                handleNewConversation();
+        const handleConversationSelected = async (event: Event) => {
+            const customEvent = event as CustomEvent<{ conversationId: string }>;
+            // Clear current messages
+            dispatch({ type: 'CLEAR_MESSAGES' });
+            dispatch({ type: 'SET_ERROR', payload: null });
+            setRetryPayload(null);
+
+            // Load the selected conversation
+            try {
+                const data = await api.getConversation(customEvent.detail.conversationId);
+                if (Array.isArray(data.messages)) {
+                    dispatch({ type: 'SET_MESSAGES', payload: data.messages });
+                } else {
+                    dispatch({ type: 'SET_MESSAGES', payload: [] });
+                }
+            } catch (err) {
+                console.error("Error loading selected conversation:", err);
+                dispatch({ type: 'SET_ERROR', payload: 'Failed to load conversation' });
             }
         };
 
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [state.isStreaming, dispatch, handleNewConversation]);
+        const handleSaveCurrentConversation = async (event: Event) => {
+            const customEvent = event as CustomEvent<{ conversationId: string }>;
+            // Save current conversation if it has messages
+            if (state.messages.length > 0) {
+                try {
+                    await persistConversation(customEvent.detail.conversationId, state.messages);
+                } catch (err) {
+                    console.error("Error saving current conversation:", err);
+                }
+            }
+        };
+
+        window.addEventListener('conversationSelected', handleConversationSelected);
+        window.addEventListener('saveCurrentConversation', handleSaveCurrentConversation);
+
+        return () => {
+            window.removeEventListener('conversationSelected', handleConversationSelected);
+            window.removeEventListener('saveCurrentConversation', handleSaveCurrentConversation);
+        };
+    }, [dispatch, state.messages, persistConversation]);
 
     // Keyboard shortcuts
     useEffect(() => {
@@ -360,7 +412,7 @@ const StreamingChatTab = memo(function StreamingChatTab({
         setRetryPayload(null);
 
         try {
-            // If no conversation exists, create a new one
+            // Only create a new conversation if there is truly no conversationId
             if (!currentConversationId) {
                 const response = await api.createNewConversation();
                 currentConversationId = response.conversation_id;
@@ -369,6 +421,13 @@ const StreamingChatTab = memo(function StreamingChatTab({
                 }
                 // Store as last active conversation
                 localStorage.setItem('lastActiveConversationId', currentConversationId);
+            }
+
+            // If still no conversationId, show error and abort
+            if (!currentConversationId) {
+                dispatch({ type: 'SET_ERROR', payload: 'No conversation selected. Please create or select a conversation.' });
+                setLoading(false);
+                return;
             }
 
             // Add user message

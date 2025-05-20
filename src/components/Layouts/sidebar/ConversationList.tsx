@@ -78,30 +78,17 @@ export default function ConversationList({
         try {
             setError(null);
 
-            const currentId = localStorage.getItem("selectedConversationId");
-            if (currentId) {
-                try {
-                    const currentConv = await api.getConversation(currentId);
-                    const hasMessages = Array.isArray(currentConv.messages) && currentConv.messages.length > 0;
-
-                    if (!hasMessages) {
-                        // Do not create a new conversation if the current one is empty
-                        console.log("Current conversation is empty. Reusing it instead of creating a new one.");
-                        onSelectConversation(currentId);
-                        return;
-                    }
-                } catch (err) {
-                    // If error fetching conversation, proceed to create a new one
-                    console.error("Error checking current conversation:", err);
-                }
-            }
-
+            // Create new conversation
             const result = await api.createNewConversation();
-
             if (result?.conversation_id) {
+                // Update localStorage
                 localStorage.setItem("selectedConversationId", result.conversation_id);
                 localStorage.setItem("lastActiveConversationId", result.conversation_id);
+
+                // Select the new conversation
                 onSelectConversation(result.conversation_id);
+
+                // Refresh the conversation list
                 await fetchConversations();
             }
         } catch (err: any) {
@@ -113,8 +100,15 @@ export default function ConversationList({
     useEffect(() => {
         fetchConversations();
 
-        const handleConversationCreated = () => {
-            fetchConversations();
+        const handleConversationCreated = (event: CustomEvent<{ conversationId: string }>) => {
+            console.log("Conversation created event received:", event.detail);
+            // Immediately fetch updated conversation list
+            fetchConversations().then(() => {
+                // Then select the new conversation if it exists
+                if (event.detail && event.detail.conversationId) {
+                    handleSelectConversation(event.detail.conversationId);
+                }
+            });
         };
 
         const handleConversationNotFound = (event: CustomEvent) => {
@@ -126,11 +120,11 @@ export default function ConversationList({
             }
         };
 
-        window.addEventListener('conversationCreated', handleConversationCreated);
+        window.addEventListener('conversationCreated', handleConversationCreated as EventListener);
         window.addEventListener('conversationNotFound', handleConversationNotFound as EventListener);
 
         return () => {
-            window.removeEventListener('conversationCreated', handleConversationCreated);
+            window.removeEventListener('conversationCreated', handleConversationCreated as EventListener);
             window.removeEventListener('conversationNotFound', handleConversationNotFound as EventListener);
         };
     }, [fetchConversations, handleNewConversation]);
@@ -164,9 +158,25 @@ export default function ConversationList({
             // Reset the conversations list
             setConversations([]);
 
+            // Fire event to clear messages in the chat component
+            window.dispatchEvent(new CustomEvent('conversationCleared'));
+
             // Create a new conversation automatically after clearing
             try {
-                await handleNewConversation();
+                const result = await api.createNewConversation();
+                if (result?.conversation_id) {
+                    // Update localStorage
+                    localStorage.setItem("selectedConversationId", result.conversation_id);
+                    localStorage.setItem("lastActiveConversationId", result.conversation_id);
+
+                    // Select the new conversation
+                    onSelectConversation(result.conversation_id);
+
+                    // Fire event to update the chat component
+                    window.dispatchEvent(new CustomEvent('conversationCreated', {
+                        detail: { conversationId: result.conversation_id }
+                    }));
+                }
             } catch (newConvErr) {
                 console.error("Failed to create new conversation after clearing:", newConvErr);
             }
@@ -182,12 +192,37 @@ export default function ConversationList({
     const handleSelectConversation = async (id: string) => {
         if (id === selectedId) return; // Skip if already selected
 
-        // Just pass the ID to the parent component
-        onSelectConversation(id);
-        localStorage.setItem("lastActiveConversationId", id);
+        try {
+            // Verify the conversation exists before selecting it
+            await api.getConversation(id);
 
-        // Refresh the conversation list to ensure it's up-to-date
-        fetchConversations();
+            // Save current conversation before switching
+            const currentId = localStorage.getItem("selectedConversationId");
+            if (currentId && currentId !== id) {
+                // Fire event to save current conversation
+                window.dispatchEvent(new CustomEvent('saveCurrentConversation', {
+                    detail: { conversationId: currentId }
+                }));
+            }
+
+            // Select the new conversation
+            onSelectConversation(id);
+            localStorage.setItem("lastActiveConversationId", id);
+
+            // Fire event to load the new conversation
+            window.dispatchEvent(new CustomEvent('conversationSelected', {
+                detail: { conversationId: id }
+            }));
+
+            // Refresh the conversation list to ensure it's up-to-date
+            await fetchConversations();
+        } catch (err) {
+            console.error("Error selecting conversation:", err);
+            // If conversation doesn't exist, remove it from the list
+            setConversations(prev => prev.filter(c => c.id !== id));
+            // Create a new conversation
+            handleNewConversation();
+        }
     };
 
     return (

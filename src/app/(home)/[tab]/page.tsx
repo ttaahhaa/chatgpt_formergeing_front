@@ -89,22 +89,24 @@ const TabPage = memo(function TabPage({ params }: { params: { tab: string } }) {
 
     return (
         <ProtectedRoute>
-            <div className="flex-1 overflow-hidden">
+            <div className="flex-1 overflow-hidden flex">
                 {tab === "chats" && (
                     permissions.canAccessChat ? (
                         <ChatProvider>
-                            <StreamingChatTab
-                                key={currentConversationId || 'new'}
-                                conversationId={currentConversationId}
-                                onConversationChange={handleConversationChange}
-                            />
+                            <div className="flex-1">
+                                <StreamingChatTab
+                                    key={`chat-${currentConversationId || 'new'}`}
+                                    conversationId={currentConversationId}
+                                    onConversationChange={handleConversationChange}
+                                />
+                            </div>
                         </ChatProvider>
                     ) : (
                         <div className="flex items-center justify-center h-full">
                             <div className="text-center">
-                                <h2 className="text-2xl font-semibold mb-3">Access Denied</h2>
+                                <h2 className="text-2xl font-bold mb-2">Access Denied</h2>
                                 <p className="text-gray-600 dark:text-gray-400">
-                                    You don&apos;t have permission to access the chat feature.
+                                    You don't have permission to access the chat feature.
                                 </p>
                             </div>
                         </div>
