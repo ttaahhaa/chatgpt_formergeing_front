@@ -1,23 +1,26 @@
+// src/components/Layouts/sidebar/index.tsx
 "use client";
 
 import { useEffect, useState } from "react";
-import ConversationList from "./ConversationList";
+import ConversationList from "@/components/Conversation/ConversationList";
 import { useSidebarContext } from "./sidebar-context";
 import Image from "next/image";
 
-export function Sidebar({
-  onSelectConversation,
-  selectedId,
-}: {
-  onSelectConversation: (id: string) => void;
-  selectedId?: string | null;
-}) {
+export function Sidebar() {
   const { isOpen, toggleSidebar } = useSidebarContext();
   const [isVisible, setIsVisible] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+
+  // Mark component as mounted (client-side only)
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   // Check if viewport is mobile
   useEffect(() => {
+    if (!isMounted) return;
+
     const checkIfMobile = () => {
       setIsMobile(window.innerWidth < 768);
     };
@@ -28,21 +31,36 @@ export function Sidebar({
     return () => {
       window.removeEventListener('resize', checkIfMobile);
     };
-  }, []);
+  }, [isMounted]);
 
   // Handle sidebar open/close state
   useEffect(() => {
     setIsVisible(isOpen);
   }, [isOpen]);
 
-  // Function to handle selection and close sidebar on mobile
-  const handleSelectConversation = (id: string) => {
-    onSelectConversation(id);
-    if (isMobile) {
-      // Just toggle the visible state directly for mobile
-      setIsVisible(false);
-    }
-  };
+  // During SSR or when not mounted, return simple skeleton
+  if (!isMounted) {
+    return (
+      <aside className="fixed left-0 top-0 z-20 h-screen w-[280px] shrink-0 overflow-hidden border-r border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900 lg:static">
+        <div className="flex flex-col items-center py-2">
+          <div className="w-40 h-10 bg-gray-200 dark:bg-gray-800 animate-pulse rounded"></div>
+        </div>
+        <div className="h-[calc(100vh-64px)] overflow-hidden">
+          <div className="flex flex-col h-full">
+            <div className="p-4">
+              <div className="w-full h-10 bg-gray-200 dark:bg-gray-800 animate-pulse rounded-md"></div>
+            </div>
+            <div className="flex-1 overflow-y-auto px-3 space-y-1">
+              {/* Loading skeleton items */}
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="w-full h-16 bg-gray-200 dark:bg-gray-800 animate-pulse rounded-md mb-2"></div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </aside>
+    );
+  }
 
   return (
     <>
@@ -70,10 +88,7 @@ export function Sidebar({
         </div>
 
         <div className="h-[calc(100vh-64px)] overflow-hidden">
-          <ConversationList
-            onSelectConversation={handleSelectConversation}
-            selectedId={selectedId}
-          />
+          <ConversationList />
         </div>
       </aside>
 

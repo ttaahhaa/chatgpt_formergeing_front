@@ -1,9 +1,11 @@
+// src/contexts/ChatContext.tsx
 "use client";
 
 import React, { createContext, useContext, useReducer, useCallback } from 'react';
 import { api } from '@/services/api';
+import { useRouter } from 'next/navigation';
 
-interface Message {
+export interface Message {
     role: 'user' | 'assistant';
     content: string;
     timestamp?: string;
@@ -60,8 +62,7 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
                 ...state,
                 messages: [],
                 error: null,
-                isStreaming: false,
-                currentConversationId: null
+                isStreaming: false
             };
         default:
             return state;
@@ -72,14 +73,16 @@ interface ChatContextValue {
     state: ChatState;
     dispatch: React.Dispatch<ChatAction>;
     persistConversation: (conversationId: string, messages: Message[]) => Promise<void>;
+    handleNewConversation: () => Promise<void>;
 }
 
 const ChatContext = createContext<ChatContextValue | null>(null);
 
 export function ChatProvider({ children }: { children: React.ReactNode }) {
     const [state, dispatch] = useReducer(chatReducer, initialState);
+    const router = useRouter();
 
-    // Function to save conversation to the server and localStorage
+    // Function to save conversation to the server
     const persistConversation = useCallback(async (conversationId: string, messages: Message[]) => {
         if (!conversationId || messages.length === 0) return;
 
@@ -96,47 +99,50 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                 history: messages
             });
 
-            // Store the last active conversation ID for session restoration
-            localStorage.setItem('lastActiveConversationId', conversationId);
-            localStorage.setItem(`conversation_preview_${conversationId}`, preview);
-
             console.log('Conversation saved successfully:', conversationId);
         } catch (err) {
             console.error('Failed to persist conversation:', err);
         }
     }, []);
 
-    // Add window unload handler to save conversation before closing
-    React.useEffect(() => {
-        const handleBeforeUnload = () => {
+    // Function to create a new conversation
+    const handleNewConversation = useCallback(async () => {
+        try {
+            // Save current conversation if it exists
             if (state.currentConversationId && state.messages.length > 0) {
-                // For beforeunload, we need to use synchronous localStorage backup
-                // instead of async API call that might not complete
-                try {
-                    const userMessages = state.messages.filter(m => m.role === 'user');
-                    const lastUserMessage = userMessages[userMessages.length - 1]?.content || 'New Conversation';
-                    const preview = lastUserMessage.slice(0, 50) + (lastUserMessage.length > 50 ? '...' : '');
-
-                    // Store conversation in localStorage as backup
-                    localStorage.setItem(`conversation_backup_${state.currentConversationId}`,
-                        JSON.stringify({
-                            messages: state.messages,
-                            preview,
-                            timestamp: new Date().toISOString()
-                        })
-                    );
-                } catch (err) {
-                    console.error('Failed to backup conversation to localStorage:', err);
-                }
+                await persistConversation(state.currentConversationId, state.messages);
             }
-        };
 
-        window.addEventListener('beforeunload', handleBeforeUnload);
-        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-    }, [state.currentConversationId, state.messages]);
+            // Create new conversation
+            const result = await api.createNewConversation();
+
+            if (result?.conversation_id) {
+                // Update state with new conversation ID
+                dispatch({ type: 'SET_CONVERSATION_ID', payload: result.conversation_id });
+                dispatch({ type: 'CLEAR_MESSAGES' });
+
+                // Update URL and localStorage
+                router.push(`/chats?conversationId=${result.conversation_id}`);
+                localStorage.setItem('lastActiveConversationId', result.conversation_id);
+
+                // Notify about conversation creation (for other components to update)
+                window.dispatchEvent(new CustomEvent('conversationCreated', {
+                    detail: { conversationId: result.conversation_id }
+                }));
+            }
+        } catch (err) {
+            console.error('Failed to create new conversation:', err);
+            dispatch({ type: 'SET_ERROR', payload: 'Failed to create new conversation' });
+        }
+    }, [state.currentConversationId, state.messages, persistConversation, router]);
 
     return (
-        <ChatContext.Provider value={{ state, dispatch, persistConversation }}>
+        <ChatContext.Provider value={{
+            state,
+            dispatch,
+            persistConversation,
+            handleNewConversation
+        }}>
             {children}
         </ChatContext.Provider>
     );

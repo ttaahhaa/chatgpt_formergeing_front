@@ -4,6 +4,7 @@ import { createContext, useContext, useState, useEffect, ReactNode, useCallback 
 import AuthService from '@/services/auth';
 import { useRouter } from 'next/navigation';
 import { api } from '@/services/api';
+import { Message } from '@/contexts/ChatContext';
 
 interface AuthContextType {
     role: string | null;
@@ -100,7 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 localStorage.setItem('lastActiveConversationId', result.conversation_id);
 
                 // Create welcome message
-                const welcomeMessage = {
+                const welcomeMessage: Message = {
                     role: 'assistant',
                     content: 'Welcome to the Saudi Interpol Chat Assistant. How can I help you today?',
                     timestamp: new Date().toISOString()

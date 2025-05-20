@@ -1,3 +1,4 @@
+// src/components/Chat/ChatArea.tsx
 "use client";
 
 import { useState, useEffect, useRef, useCallback, memo } from "react";
@@ -5,19 +6,10 @@ import { api } from "@/services/api";
 import { SearchIcon } from "@/assets/icons";
 import ChatBubble from "@/components/Chat/ChatBubble";
 import TextareaAutosize from 'react-textarea-autosize';
-import { useChat } from "@/contexts/ChatContext";
-
-interface Message {
-    role: 'user' | 'assistant';
-    content: string;
-    timestamp?: string;
-    sources?: { document: string; relevance: number }[];
-    isStreaming?: boolean;
-}
+import { useConversation, Message } from "@/contexts/ConversationContext";
 
 interface RetryPayload {
     message: string;
-    conversationId?: string | null;
 }
 
 // Typing indicator component for streaming messages
@@ -135,207 +127,121 @@ const EmptyState = memo(function EmptyState() {
     );
 });
 
-const StreamingChatTab = memo(function StreamingChatTab({
-    conversationId,
-    onConversationChange
-}: {
-    conversationId: string | null;
-    onConversationChange?: (newConversationId: string) => void;
-}) {
-    const { state, dispatch, persistConversation } = useChat();
-    const [loading, setLoading] = useState(false);
-    const [mode, setMode] = useState<"auto" | "documents_only" | "general_knowledge">("auto");
-    const [isLoadingConversation, setIsLoadingConversation] = useState(false);
-    const [isClient, setIsClient] = useState(false);
+export default function ChatArea() {
+    const { state: conversationState, createConversation } = useConversation();
+    const [messages, setMessages] = useState<Message[]>([]);
+    const [isStreaming, setIsStreaming] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
     const [retryPayload, setRetryPayload] = useState<RetryPayload | null>(null);
+    const [mode, setMode] = useState<"auto" | "documents_only" | "general_knowledge">("auto");
 
     const abortControllerRef = useRef<AbortController | null>(null);
     const streamingMessageRef = useRef<string>("");
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
-    const previousConversationIdRef = useRef<string | null>(null);
-    const hasCreatedInitialConversation = useRef<boolean>(false);
-
-    // Set isClient to true after component mounts
-    useEffect(() => {
-        setIsClient(true);
-    }, []);
+    const currentConversationIdRef = useRef<string | null>(null);
 
     // Load saved mode preference
     useEffect(() => {
-        if (!isClient) return;
         const savedMode = localStorage.getItem("chat_mode");
         if (savedMode) {
             setMode(savedMode as "auto" | "documents_only" | "general_knowledge");
         }
-    }, [isClient]);
+    }, []);
 
     // Save mode preference when changed
     useEffect(() => {
-        if (!isClient) return;
         localStorage.setItem("chat_mode", mode);
-    }, [mode, isClient]);
+    }, [mode]);
 
     // Scroll to bottom when messages change
     useEffect(() => {
         if (messagesEndRef.current && scrollContainerRef.current) {
             scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
         }
-    }, [state.messages]);
+    }, [messages]);
 
-    // Create initial conversation if none exists
+    // Load conversation when selected conversation changes
     useEffect(() => {
-        // When component first mounts and no conversation exists, create one automatically
-        const initializeConversation = async () => {
-            if (!conversationId && !isLoadingConversation && !hasCreatedInitialConversation.current) {
-                hasCreatedInitialConversation.current = true;
-                try {
-                    setIsLoadingConversation(true);
-                    const result = await api.createNewConversation();
-                    if (result?.conversation_id && onConversationChange) {
-                        onConversationChange(result.conversation_id);
-                        // Store the conversation ID as last active
-                        localStorage.setItem('lastActiveConversationId', result.conversation_id);
-                    }
-                } catch (err) {
-                    console.error("Failed to create initial conversation:", err);
-                    hasCreatedInitialConversation.current = false;
-                } finally {
-                    setIsLoadingConversation(false);
-                }
-            }
-        };
-
-        if (isClient) {
-            initializeConversation();
-        }
-    }, [conversationId, isLoadingConversation, onConversationChange, isClient]);
-
-    // Handle conversation ID changes
-    useEffect(() => {
-        if (!conversationId || previousConversationIdRef.current === conversationId) {
-            previousConversationIdRef.current = conversationId;
+        const selectedId = conversationState.selectedConversationId;
+        
+        // Update the current conversation id ref
+        currentConversationIdRef.current = selectedId;
+        
+        if (!selectedId) {
+            setMessages([]);
             return;
         }
 
-        const handleConversationChange = async () => {
-            setIsLoadingConversation(true);
-            dispatch({ type: 'CLEAR_MESSAGES' });
-            dispatch({ type: 'SET_ERROR', payload: null });
-            setRetryPayload(null);
-
-            // Save previous conversation before loading the new one
-            if (previousConversationIdRef.current && state.messages.length > 0) {
-                try {
-                    await persistConversation(
-                        previousConversationIdRef.current,
-                        state.messages
-                    );
-                } catch (err) {
-                    console.error("Error saving previous conversation:", err);
-                }
-            }
-
+        const loadConversation = async () => {
             try {
-                const data = await api.getConversation(conversationId);
-                if (Array.isArray(data.messages)) {
-                    dispatch({ type: 'SET_MESSAGES', payload: data.messages });
+                setIsLoading(true);
+                setError(null);
+                
+                const response = await api.getConversation(selectedId);
+                if (Array.isArray(response.messages)) {
+                    setMessages(response.messages);
                 } else {
-                    dispatch({ type: 'SET_MESSAGES', payload: [] });
+                    setMessages([]);
                 }
-
-                // Store as last active conversation
-                localStorage.setItem('lastActiveConversationId', conversationId);
             } catch (err: any) {
-                console.error("StreamingChatTab: Error loading conversation:", err);
-                dispatch({ type: 'SET_ERROR', payload: `Failed to load conversation: ${err.message}` });
+                console.error("Error loading conversation:", err);
+                setError(err.message || "Failed to load conversation");
+                
+                // If conversation not found, create a new one
+                if (err.message && err.message.includes("not found")) {
+                    try {
+                        const newId = await createConversation();
+                        if (newId) {
+                            // Don't need to set messages here as the conversation change
+                            // will trigger this effect again
+                            setError(null);
+                        }
+                    } catch (createErr) {
+                        console.error("Error creating new conversation:", createErr);
+                    }
+                }
             } finally {
-                setIsLoadingConversation(false);
-            }
-
-            previousConversationIdRef.current = conversationId;
-        };
-
-        handleConversationChange();
-    }, [conversationId, dispatch, state.messages, persistConversation]);
-
-    // Handle creating a new conversation
-    const handleNewConversation = useCallback(async () => {
-        if (state.isStreaming) return;
-
-        try {
-            // Save current conversation first
-            if (conversationId && state.messages.length > 0) {
-                await persistConversation(conversationId, state.messages);
-            }
-
-            const result = await api.createNewConversation();
-            if (result?.conversation_id && onConversationChange) {
-                onConversationChange(result.conversation_id);
-
-                // Store as last active conversation
-                localStorage.setItem('lastActiveConversationId', result.conversation_id);
-            }
-        } catch (err) {
-            console.error("Failed to create new conversation:", err);
-        }
-    }, [state.isStreaming, state.messages, conversationId, onConversationChange, persistConversation]);
-
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            // Escape key to cancel streaming
-            if (e.key === 'Escape' && state.isStreaming && abortControllerRef.current) {
-                abortControllerRef.current.abort();
-                dispatch({ type: 'SET_STREAMING', payload: false });
-            }
-
-            // Ctrl+N to create new conversation
-            if (e.ctrlKey && e.key === 'n') {
-                e.preventDefault();
-                handleNewConversation();
+                setIsLoading(false);
             }
         };
 
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [state.isStreaming, dispatch, handleNewConversation]);
+        loadConversation();
+    }, [conversationState.selectedConversationId, createConversation]);
 
     // Handle error recovery
     const handleStreamError = useCallback((error: string) => {
         // Display error to user
-        dispatch({ type: 'SET_ERROR', payload: error });
+        setError(error);
 
         // Clean up streaming state
-        dispatch({ type: 'SET_STREAMING', payload: false });
+        setIsStreaming(false);
 
         // Remove partial streaming message if present
-        if (state.messages.length > 0 && state.messages[state.messages.length - 1].isStreaming) {
-            dispatch({
-                type: 'SET_MESSAGES',
-                payload: state.messages.filter((_, idx) => idx !== state.messages.length - 1)
-            });
+        if (messages.length > 0 && messages[messages.length - 1].isStreaming) {
+            setMessages(prev => prev.filter((_, idx) => idx !== prev.length - 1));
         }
-    }, [state.messages, dispatch]);
+    }, [messages]);
 
     // Handle message submission
     const handleSubmit = useCallback(async (userMessage: string) => {
-        if (state.isStreaming) return;
+        if (isStreaming) return;
 
-        let currentConversationId = conversationId;
-        setLoading(true);
-        dispatch({ type: 'SET_ERROR', payload: null });
+        let currentConversationId = conversationState.selectedConversationId;
+        setIsLoading(true);
+        setError(null);
         setRetryPayload(null);
 
         try {
             // If no conversation exists, create a new one
             if (!currentConversationId) {
-                const response = await api.createNewConversation();
-                currentConversationId = response.conversation_id;
-                if (onConversationChange) {
-                    onConversationChange(currentConversationId);
+                const newId = await createConversation();
+                currentConversationId = newId;
+                
+                if (!currentConversationId) {
+                    throw new Error("Failed to create conversation");
                 }
-                // Store as last active conversation
-                localStorage.setItem('lastActiveConversationId', currentConversationId);
             }
 
             // Add user message
@@ -345,7 +251,7 @@ const StreamingChatTab = memo(function StreamingChatTab({
                 timestamp: new Date().toISOString()
             };
 
-            dispatch({ type: 'ADD_MESSAGE', payload: newUserMessage });
+            setMessages(prev => [...prev, newUserMessage]);
 
             // Create placeholder for assistant response
             streamingMessageRef.current = "";
@@ -356,20 +262,12 @@ const StreamingChatTab = memo(function StreamingChatTab({
                 isStreaming: true
             };
 
-            dispatch({ type: 'ADD_MESSAGE', payload: streamingMessage });
-            dispatch({ type: 'SET_STREAMING', payload: true });
+            setMessages(prev => [...prev, streamingMessage]);
+            setIsStreaming(true);
 
             // Create abort controller for this request
             const { controller, signal } = api.createAbortController();
             abortControllerRef.current = controller;
-
-            // Set up cancel handler for Escape key
-            const handleKeyDown = (e: KeyboardEvent) => {
-                if (e.key === 'Escape' && controller) {
-                    controller.abort();
-                }
-            };
-            window.addEventListener('keydown', handleKeyDown);
 
             await api.streamChatWithAbort(
                 {
@@ -380,68 +278,78 @@ const StreamingChatTab = memo(function StreamingChatTab({
                 {
                     onToken: (token) => {
                         streamingMessageRef.current += token;
-                        dispatch({
-                            type: 'UPDATE_LAST_MESSAGE',
-                            payload: { content: streamingMessageRef.current }
+                        setMessages(prev => {
+                            const updated = [...prev];
+                            const lastMsg = updated[updated.length - 1];
+                            if (lastMsg && lastMsg.isStreaming) {
+                                updated[updated.length - 1] = {
+                                    ...lastMsg,
+                                    content: streamingMessageRef.current
+                                };
+                            }
+                            return updated;
                         });
                     },
                     onComplete: (sources) => {
-                        dispatch({
-                            type: 'UPDATE_LAST_MESSAGE',
-                            payload: {
-                                isStreaming: false,
-                                sources: sources
+                        setMessages(prev => {
+                            const updated = [...prev];
+                            const lastMsg = updated[updated.length - 1];
+                            if (lastMsg && lastMsg.isStreaming) {
+                                updated[updated.length - 1] = {
+                                    ...lastMsg,
+                                    content: streamingMessageRef.current,
+                                    isStreaming: false,
+                                    sources
+                                };
                             }
+                            return updated;
                         });
+                        
+                        setIsStreaming(false);
 
                         // Save conversation automatically after completion
-                        const allMessages = [
-                            ...state.messages.slice(0, -1),
-                            {
-                                ...state.messages[state.messages.length - 1],
-                                content: streamingMessageRef.current,
-                                isStreaming: false,
-                                sources
-                            }
-                        ];
-
-                        persistConversation(
-                            currentConversationId!,
-                            allMessages
-                        );
-
-                        // Update conversation preview
-                        const preview = userMessage.slice(0, 50) + (userMessage.length > 50 ? "..." : "");
-                        localStorage.setItem(`conversation_preview_${currentConversationId}`, preview);
+                        if (currentConversationId) {
+                            api.saveConversation({
+                                conversation_id: currentConversationId,
+                                preview: userMessage.slice(0, 50) + (userMessage.length > 50 ? "..." : ""),
+                                history: [
+                                    ...messages,
+                                    newUserMessage,
+                                    {
+                                        role: 'assistant',
+                                        content: streamingMessageRef.current,
+                                        timestamp: new Date().toISOString(),
+                                        sources
+                                    }
+                                ]
+                            }).catch(err => {
+                                console.error("Failed to save conversation:", err);
+                            });
+                        }
                     },
                     onError: (errMsg) => {
                         handleStreamError(errMsg);
                         setRetryPayload({
-                            message: userMessage,
-                            conversationId: currentConversationId || undefined
+                            message: userMessage
                         });
                     }
                 },
                 signal
             );
-
-            // Clean up event listener
-            window.removeEventListener('keydown', handleKeyDown);
         } catch (err: any) {
             console.error('Streaming error:', err);
             if (err.name !== 'AbortError') {
-                dispatch({ type: 'SET_ERROR', payload: err.message || 'Failed to stream message' });
+                setError(err.message || 'Failed to stream message');
                 setRetryPayload({
-                    message: userMessage,
-                    conversationId: currentConversationId || undefined
+                    message: userMessage
                 });
             }
         } finally {
-            dispatch({ type: 'SET_STREAMING', payload: false });
-            setLoading(false);
+            setIsStreaming(false);
+            setIsLoading(false);
             abortControllerRef.current = null;
         }
-    }, [conversationId, state.isStreaming, mode, onConversationChange, dispatch, state.messages, persistConversation, handleStreamError]);
+    }, [conversationState.selectedConversationId, createConversation, isStreaming, messages, mode, handleStreamError]);
 
     // Handle retry
     const handleRetry = useCallback(() => {
@@ -453,16 +361,64 @@ const StreamingChatTab = memo(function StreamingChatTab({
     const handleCancelStreaming = useCallback(() => {
         if (abortControllerRef.current) {
             abortControllerRef.current.abort();
+            setIsStreaming(false);
+            
+            // Remove the streaming message
+            setMessages(prev => {
+                if (prev[prev.length - 1]?.isStreaming) {
+                    return prev.slice(0, -1);
+                }
+                return prev;
+            });
         }
     }, []);
 
-    if (!isClient) {
+    // Set up keyboard shortcuts
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            // Escape key to cancel streaming
+            if (e.key === 'Escape' && isStreaming && abortControllerRef.current) {
+                handleCancelStreaming();
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isStreaming, handleCancelStreaming]);
+
+    // Show empty state if no conversation is selected
+    if (!conversationState.selectedConversationId && !isLoading) {
         return (
-            <div className="flex items-center justify-center h-full">
-                <div className="flex items-center space-x-2">
-                    <div className="w-4 h-4 bg-primary rounded-full animate-bounce"></div>
-                    <div className="w-4 h-4 bg-primary rounded-full animate-bounce" style={{ animationDelay: "0.2s" }}></div>
-                    <div className="w-4 h-4 bg-primary rounded-full animate-bounce" style={{ animationDelay: "0.4s" }}></div>
+            <div className="flex flex-col items-center justify-center h-full">
+                <div className="text-center">
+                    <h2 className="text-2xl font-semibold mb-3">Welcome to the Chat Assistant</h2>
+                    <p className="text-gray-600 dark:text-gray-400 mb-6">
+                        Please select an existing conversation or create a new one to get started.
+                    </p>
+                    <div className="opacity-70">
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="120"
+                            height="120"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            className="mx-auto mb-4"
+                        >
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                            <path d="M8 9h8"></path>
+                            <path d="M8 13h6"></path>
+                        </svg>
+                    </div>
+                    <button
+                        onClick={() => createConversation()}
+                        className="mt-6 px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90 transition-colors"
+                    >
+                        Create New Chat
+                    </button>
                 </div>
             </div>
         );
@@ -494,8 +450,8 @@ const StreamingChatTab = memo(function StreamingChatTab({
                 </div>
 
                 <button
-                    onClick={handleNewConversation}
-                    disabled={state.isStreaming}
+                    onClick={() => createConversation()}
+                    disabled={isStreaming}
                     className="text-sm bg-gray-100 hover:bg-gray-200 dark:bg-dark-3 dark:hover:bg-dark-4 rounded-md px-3 py-1.5 flex items-center gap-1 transition-colors disabled:opacity-50"
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -511,7 +467,7 @@ const StreamingChatTab = memo(function StreamingChatTab({
                 className="flex-1 overflow-y-auto px-2 space-y-4 mb-4"
                 style={{ maxHeight: "calc(100vh - 340px)", minHeight: "200px" }}
             >
-                {isLoadingConversation ? (
+                {isLoading && messages.length === 0 ? (
                     <div className="flex items-center justify-center h-full">
                         <div className="flex items-center space-x-2">
                             <div className="w-4 h-4 bg-primary rounded-full animate-bounce"></div>
@@ -519,11 +475,11 @@ const StreamingChatTab = memo(function StreamingChatTab({
                             <div className="w-4 h-4 bg-primary rounded-full animate-bounce" style={{ animationDelay: "0.4s" }}></div>
                         </div>
                     </div>
-                ) : state.messages.length === 0 ? (
+                ) : messages.length === 0 ? (
                     <EmptyState />
                 ) : (
                     <div className="space-y-4">
-                        {state.messages.map((message, index) => (
+                        {messages.map((message, index) => (
                             <div key={index}>
                                 {message.role === 'user' ? (
                                     <div className="flex justify-end">
@@ -565,9 +521,9 @@ const StreamingChatTab = memo(function StreamingChatTab({
                     </div>
                 )}
 
-                {state.error && (
+                {error && (
                     <div className="text-red-600 text-sm text-center p-4 bg-red-50 dark:bg-red-900/20 rounded flex flex-col items-center">
-                        <p className="mb-2">{state.error}</p>
+                        <p className="mb-2">{error}</p>
                         {retryPayload && (
                             <button
                                 onClick={handleRetry}
@@ -579,7 +535,7 @@ const StreamingChatTab = memo(function StreamingChatTab({
                     </div>
                 )}
 
-                {state.isStreaming && (
+                {isStreaming && (
                     <div className="flex justify-center mt-2">
                         <button
                             onClick={handleCancelStreaming}
@@ -596,9 +552,9 @@ const StreamingChatTab = memo(function StreamingChatTab({
             {/* Input form */}
             <ChatInput
                 onSubmit={handleSubmit}
-                disabled={loading || isLoadingConversation || state.isStreaming}
+                disabled={isLoading || !conversationState.selectedConversationId || isStreaming}
                 placeholder={
-                    state.isStreaming
+                    isStreaming
                         ? "Wait for response to complete..."
                         : "Ask anything..."
                 }
@@ -614,6 +570,4 @@ const StreamingChatTab = memo(function StreamingChatTab({
             </div>
         </div>
     );
-});
-
-export default StreamingChatTab;
+}

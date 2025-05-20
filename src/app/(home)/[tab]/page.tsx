@@ -1,27 +1,24 @@
+// src/app/(home)/[tab]/page.tsx
 "use client";
 
-import { useState, useEffect, useCallback, memo } from "react";
-import { useSearchParams } from "next/navigation";
-import StreamingChatTab from "@/components/Chat/StreamingChatTab";
+import { useState, useEffect } from "react";
+import ChatTab from "@/components/Chat/ChatTab";
 import DocumentManagement from "@/components/DocumentManagement/DocumentManagement";
 import SettingsPanel from "@/components/Settings/SettingsPanel";
 import { LogViewer } from "@/components/Logs/LogViewer";
 import StatusPanel from "@/components/Status/StatusPanel";
 import ProtectedRoute from '@/components/ProtectedRoute';
-import { notFound, useRouter } from 'next/navigation';
+import { notFound } from 'next/navigation';
 import AuthService from '@/services/auth';
-import { ChatProvider } from "@/contexts/ChatContext";
 
 // Define valid tab IDs
 const validTabIds = ['chats', 'documents', 'settings', 'logs', 'status'] as const;
 type TabId = typeof validTabIds[number];
 
-const TabPage = memo(function TabPage({ params }: { params: { tab: string } }) {
-    const searchParams = useSearchParams();
-    const router = useRouter();
+export default function TabPage({ params }: { params: { tab: string } }) {
     const tab = params.tab as TabId;
     const [isLoading, setIsLoading] = useState(true);
-    const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+    const [isMounted, setIsMounted] = useState(false);
     const [permissions, setPermissions] = useState({
         canAccessChat: false,
         canAccessDocuments: false,
@@ -35,47 +32,38 @@ const TabPage = memo(function TabPage({ params }: { params: { tab: string } }) {
         notFound();
     }
 
-    // Get conversation ID from URL if present
+    // Set mounted state on client
     useEffect(() => {
-        const conversationIdFromUrl = searchParams.get('conversationId');
-        if (conversationIdFromUrl) {
-            setCurrentConversationId(conversationIdFromUrl);
-            // Store as last active
-            localStorage.setItem('lastActiveConversationId', conversationIdFromUrl);
-        } else if (tab === 'chats') {
-            // If on chats tab but no ID in URL, check localStorage
-            const lastActiveId = localStorage.getItem('lastActiveConversationId');
-            if (lastActiveId) {
-                setCurrentConversationId(lastActiveId);
-                // Update URL to include the conversation ID
-                router.replace(`/chats?conversationId=${lastActiveId}`);
-            }
-        }
-    }, [searchParams, tab, router]);
-
-    useEffect(() => {
-        const authService = AuthService.getInstance();
-        const userInfo = authService.getUserInfo();
-
-        const newPermissions = {
-            canAccessChat: authService.hasPermission('chat:stream'),
-            canAccessDocuments: authService.hasPermission('documents:upload'),
-            canAccessSettings: authService.hasPermission('admin'),
-            canAccessLogs: authService.hasPermission('admin'),
-            canAccessStatus: authService.hasPermission('admin')
-        };
-
-        setPermissions(newPermissions);
-        setIsLoading(false);
+        setIsMounted(true);
     }, []);
 
-    const handleConversationChange = useCallback((newConversationId: string) => {
-        setCurrentConversationId(newConversationId);
-        // Update URL with the new conversation ID
-        router.replace(`/chats?conversationId=${newConversationId}`);
-    }, [router]);
+    // Load permissions after component mounts
+    useEffect(() => {
+        if (!isMounted) return;
 
-    if (isLoading) {
+        const authService = AuthService.getInstance();
+        
+        try {
+            const userInfo = authService.getUserInfo();
+
+            const newPermissions = {
+                canAccessChat: authService.hasPermission('chat:stream'),
+                canAccessDocuments: authService.hasPermission('documents:upload'),
+                canAccessSettings: authService.hasPermission('admin'),
+                canAccessLogs: authService.hasPermission('admin'),
+                canAccessStatus: authService.hasPermission('admin')
+            };
+
+            setPermissions(newPermissions);
+        } catch (err) {
+            console.error("Error getting permissions:", err);
+        } finally {
+            setIsLoading(false);
+        }
+    }, [isMounted]);
+
+    // During SSR or when loading, show a loading skeleton
+    if (isLoading || !isMounted) {
         return (
             <div className="flex items-center justify-center h-full">
                 <div className="flex items-center space-x-2">
@@ -92,21 +80,13 @@ const TabPage = memo(function TabPage({ params }: { params: { tab: string } }) {
             <div className="flex-1 overflow-hidden flex">
                 {tab === "chats" && (
                     permissions.canAccessChat ? (
-                        <ChatProvider>
-                            <div className="flex-1">
-                                <StreamingChatTab
-                                    key={`chat-${currentConversationId || 'new'}`}
-                                    conversationId={currentConversationId}
-                                    onConversationChange={handleConversationChange}
-                                />
-                            </div>
-                        </ChatProvider>
+                        <ChatTab />
                     ) : (
                         <div className="flex items-center justify-center h-full">
                             <div className="text-center">
                                 <h2 className="text-2xl font-bold mb-2">Access Denied</h2>
                                 <p className="text-gray-600 dark:text-gray-400">
-                                    You don't have permission to access the chat feature.
+                                    You don&apos;t have permission to access the chat feature.
                                 </p>
                             </div>
                         </div>
@@ -132,6 +112,4 @@ const TabPage = memo(function TabPage({ params }: { params: { tab: string } }) {
             </div>
         </ProtectedRoute>
     );
-});
-
-export default TabPage;
+}
