@@ -179,17 +179,37 @@ export async function streamChatWithAbort(
     const { onToken, onComplete, onError } = callbacks;
 
     try {
+        const defaultHeaders: Record<string, string> = {
+            'Content-Type': 'application/json',
+        };
+
+        // Add authorization header if token exists
+        if (typeof window !== 'undefined') {
+            const token = localStorage.getItem('token');
+            if (token) {
+                defaultHeaders['Authorization'] = `Bearer ${token}`;
+            }
+        }
+
         const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/chat/stream`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                ...(localStorage.getItem('token') ? { 'Authorization': `Bearer ${localStorage.getItem('token')}` } : {})
-            },
+            headers: defaultHeaders,
             body: JSON.stringify(data),
-            signal
+            signal,
+            credentials: 'include', // Include cookies in the request
         });
 
         if (!response.ok) {
+            if (response.status === 401) {
+                // Clear token if unauthorized
+                if (typeof window !== 'undefined') {
+                    localStorage.removeItem('token');
+                    localStorage.removeItem('userInfo');
+                    // Clear the token cookie
+                    document.cookie = 'token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Strict; Secure; HttpOnly';
+                }
+                throw new Error('Authentication required');
+            }
             const errorText = await response.text();
             throw new Error(errorText || `HTTP error ${response.status}`);
         }

@@ -113,21 +113,38 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                 await persistConversation(state.currentConversationId, state.messages);
             }
 
-            // Create new conversation
-            const result = await api.createNewConversation();
+            // Get all conversations
+            const { conversations } = await api.getConversations();
 
-            if (result?.conversation_id) {
+            // Find an empty conversation
+            const emptyConversation = conversations.find(conv => conv.messageCount === 0);
+
+            let newConversationId;
+            if (emptyConversation) {
+                // Use existing empty conversation
+                console.log('Using existing empty conversation:', emptyConversation.id);
+                newConversationId = emptyConversation.id;
+            } else {
+                // Create new conversation if no empty one exists
+                const result = await api.createNewConversation();
+                if (result?.conversation_id) {
+                    newConversationId = result.conversation_id;
+                    console.log("New conversation created:", newConversationId);
+                }
+            }
+
+            if (newConversationId) {
                 // Update state with new conversation ID
-                dispatch({ type: 'SET_CONVERSATION_ID', payload: result.conversation_id });
+                dispatch({ type: 'SET_CONVERSATION_ID', payload: newConversationId });
                 dispatch({ type: 'CLEAR_MESSAGES' });
 
                 // Update URL and localStorage
-                router.push(`/chats?conversationId=${result.conversation_id}`);
-                localStorage.setItem('lastActiveConversationId', result.conversation_id);
+                router.push(`/chats?conversationId=${newConversationId}`);
+                localStorage.setItem('lastActiveConversationId', newConversationId);
 
                 // Notify about conversation creation (for other components to update)
                 window.dispatchEvent(new CustomEvent('conversationCreated', {
-                    detail: { conversationId: result.conversation_id }
+                    detail: { conversationId: newConversationId }
                 }));
             }
         } catch (err) {

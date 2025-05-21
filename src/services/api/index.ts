@@ -118,4 +118,5 @@ export const api = {
     // Settings
     getModels: settings.getModels,
     setModel: settings.setModel,
+    getPreferredModel: settings.getPreferredModel,
 };

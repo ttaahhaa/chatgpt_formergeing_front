@@ -6,6 +6,7 @@ import { SearchIcon } from "@/assets/icons";
 import ChatBubble from "@/components/Chat/ChatBubble";
 import TextareaAutosize from 'react-textarea-autosize';
 import { useChat } from "@/contexts/ChatContext";
+import { getOrCreateEmptyConversation } from '@/utils/conversation';
 
 interface Message {
     role: 'user' | 'assistant';
@@ -142,7 +143,7 @@ const StreamingChatTab = memo(function StreamingChatTab({
     conversationId: string | null;
     onConversationChange?: (newConversationId: string) => void;
 }) {
-    const { state, dispatch, persistConversation } = useChat();
+    const { state, dispatch, persistConversation, handleNewConversation } = useChat();
     const [loading, setLoading] = useState(false);
     const [mode, setMode] = useState<"auto" | "documents_only" | "general_knowledge">("auto");
     const [isLoadingConversation, setIsLoadingConversation] = useState(false);
@@ -191,11 +192,9 @@ const StreamingChatTab = memo(function StreamingChatTab({
                 hasCreatedInitialConversation.current = true;
                 try {
                     setIsLoadingConversation(true);
-                    const result = await api.createNewConversation();
-                    if (result?.conversation_id && onConversationChange) {
-                        onConversationChange(result.conversation_id);
-                        // Store the conversation ID as last active
-                        localStorage.setItem('lastActiveConversationId', result.conversation_id);
+                    const newConversationId = await getOrCreateEmptyConversation();
+                    if (onConversationChange) {
+                        onConversationChange(newConversationId);
                     }
                 } catch (err) {
                     console.error("Failed to create initial conversation:", err);
@@ -278,54 +277,6 @@ const StreamingChatTab = memo(function StreamingChatTab({
 
         handleConversationChange();
     }, [conversationId, dispatch, state.messages, persistConversation]);
-
-    // Handle creating a new conversation
-    const handleNewConversation = useCallback(async () => {
-        if (state.isStreaming) return;
-
-        try {
-            // Save current conversation first if it exists and has messages
-            if (conversationId && state.messages.length > 0) {
-                await persistConversation(conversationId, state.messages);
-            }
-
-            // Clear messages immediately for better UX
-            dispatch({ type: 'CLEAR_MESSAGES' });
-            dispatch({ type: 'SET_ERROR', payload: null });
-            setRetryPayload(null);
-
-            // Show loading indicator
-            setIsLoadingConversation(true);
-
-            // Create new conversation
-            const result = await api.createNewConversation();
-            if (result?.conversation_id) {
-                console.log("New conversation created:", result.conversation_id);
-
-                // Update localStorage
-                localStorage.setItem('lastActiveConversationId', result.conversation_id);
-
-                // Reset component state
-                previousConversationIdRef.current = result.conversation_id;
-                streamingMessageRef.current = "";
-
-                // Fire event to update sidebar BEFORE changing the conversation
-                window.dispatchEvent(new CustomEvent('conversationCreated', {
-                    detail: { conversationId: result.conversation_id }
-                }));
-
-                // Navigate to the new conversation (this will trigger URL/route change)
-                if (onConversationChange) {
-                    onConversationChange(result.conversation_id);
-                }
-            }
-        } catch (err) {
-            console.error("Failed to create new conversation:", err);
-            dispatch({ type: 'SET_ERROR', payload: 'Failed to create new conversation. Please try again.' });
-        } finally {
-            setIsLoadingConversation(false);
-        }
-    }, [state.isStreaming, state.messages, conversationId, onConversationChange, persistConversation, dispatch]);
 
     // Add event listeners for conversation management
     useEffect(() => {
@@ -584,17 +535,6 @@ const StreamingChatTab = memo(function StreamingChatTab({
                         </label>
                     ))}
                 </div>
-
-                <button
-                    onClick={handleNewConversation}
-                    disabled={state.isStreaming}
-                    className="text-sm bg-gray-100 hover:bg-gray-200 dark:bg-dark-3 dark:hover:bg-dark-4 rounded-md px-3 py-1.5 flex items-center gap-1 transition-colors disabled:opacity-50"
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                    </svg>
-                    New Chat
-                </button>
             </div>
 
             {/* Chat messages */}

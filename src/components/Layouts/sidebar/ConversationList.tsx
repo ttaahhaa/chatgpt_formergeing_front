@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { api } from '@/services/api';
-import { useChat } from "@/contexts/ChatContext";
+import { getOrCreateEmptyConversation } from '@/utils/conversation';
 
 interface Conversation {
     id: string;
@@ -21,7 +21,6 @@ export default function ConversationList({
     const [conversations, setConversations] = useState<Conversation[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const { handleNewConversation } = useChat();
 
     const fetchConversations = async () => {
         try {
@@ -48,6 +47,29 @@ export default function ConversationList({
         } catch (err: any) {
             setError(err.message || 'Failed to delete conversation');
             console.error('Error deleting conversation:', err);
+        }
+    };
+
+    const handleNewConversation = async () => {
+        try {
+            // Check for existing empty conversations
+            const { conversations } = await api.getConversations();
+            const emptyConversation = conversations.find(conv => conv.messageCount === 0);
+
+            if (emptyConversation) {
+                // If an empty conversation exists, select it instead of creating a new one
+                console.log('Using existing empty conversation:', emptyConversation.id);
+                onSelectConversation(emptyConversation.id);
+                return;
+            }
+
+            // If no empty conversation exists, create a new one
+            const conversationId = await getOrCreateEmptyConversation();
+            onSelectConversation(conversationId);
+            await fetchConversations(); // Refresh the list
+        } catch (err) {
+            console.error("Failed to create new conversation:", err);
+            setError('Failed to create new conversation');
         }
     };
 

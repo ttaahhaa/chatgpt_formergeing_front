@@ -5,6 +5,7 @@ import AuthService from '@/services/auth';
 import { useRouter } from 'next/navigation';
 import { api } from '@/services/api';
 import { Message } from '@/contexts/ChatContext';
+import { getOrCreateEmptyConversation } from '@/utils/conversation';
 
 interface AuthContextType {
     role: string | null;
@@ -93,29 +94,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 return;
             }
 
-            console.log('Creating initial conversation after login');
-            const result = await api.createNewConversation();
-
-            if (result?.conversation_id) {
-                // Store the conversation ID for future use
-                localStorage.setItem('lastActiveConversationId', result.conversation_id);
-
-                // Create welcome message
-                const welcomeMessage: Message = {
-                    role: 'assistant',
-                    content: 'Welcome to the Saudi Interpol Chat Assistant. How can I help you today?',
-                    timestamp: new Date().toISOString()
-                };
-
-                // Save conversation with welcome message
-                await api.saveConversation({
-                    conversation_id: result.conversation_id,
-                    preview: 'Welcome to Chat Assistant',
-                    history: [welcomeMessage]
-                });
-
-                console.log('Initial conversation created successfully:', result.conversation_id);
-            }
+            const conversationId = await getOrCreateEmptyConversation();
+            localStorage.setItem('lastActiveConversationId', conversationId);
         } catch (err) {
             console.error('Failed to create initial conversation after login:', err);
         }
@@ -136,18 +116,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
     };
 
-    const logout = () => {
-        auth.logout();
-        updateAuthState();
+    const logout = async () => {
+        try {
+            // Get current conversation ID
+            const currentConversationId = localStorage.getItem('lastActiveConversationId');
 
-        // Clear conversation-related storage on logout
-        Object.keys(localStorage).forEach(key => {
-            if (key === 'lastActiveConversationId' || key.startsWith('conversation_preview_')) {
-                localStorage.removeItem(key);
+            if (currentConversationId) {
+                try {
+                    // Get the conversation to check if it's empty
+                    const conversation = await api.getConversation(currentConversationId);
+
+                    // If conversation exists and has no messages, delete it
+                    if (conversation && (!conversation.messages || conversation.messages.length === 0)) {
+                        try {
+                            await api.deleteConversation(currentConversationId);
+                            console.log('Successfully deleted empty conversation:', currentConversationId);
+                        } catch (deleteError) {
+                            console.error('Failed to delete conversation:', deleteError);
+                            // Try to clear all conversations as a fallback
+                            try {
+                                await api.clearAllConversations();
+                                console.log('Cleared all conversations as fallback');
+                            } catch (clearError) {
+                                console.error('Failed to clear conversations:', clearError);
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.error('Error checking conversation:', err);
+                }
             }
-        });
+        } catch (error) {
+            console.error('Error during logout cleanup:', error);
+        } finally {
+            // Proceed with normal logout
+            auth.logout();
+            updateAuthState();
 
-        router.push('/auth/login');
+            // Clear conversation-related storage on logout
+            Object.keys(localStorage).forEach(key => {
+                if (key === 'lastActiveConversationId' || key.startsWith('conversation_preview_')) {
+                    localStorage.removeItem(key);
+                }
+            });
+
+            router.push('/auth/login');
+        }
     };
 
     // Update the context value with the latest state and methods

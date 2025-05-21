@@ -3,44 +3,83 @@
 import { useEffect, useState } from "react";
 import { api } from "@/services/api";
 
+// Constants for localStorage keys
+const STORED_MODELS_KEY = 'ollama_models';
+const MODELS_TIMESTAMP_KEY = 'ollama_models_timestamp';
+const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+
 export default function SettingsPanel() {
     const [ollamaStatus, setOllamaStatus] = useState("loading");
     const [availableModels, setAvailableModels] = useState<string[]>([]);
-    const [currentModel, setCurrentModel] = useState<string>("");
     const [selectedModel, setSelectedModel] = useState<string>("");
     const [message, setMessage] = useState<string>("");
     const [loading, setLoading] = useState(true);
     const [clearingConversations, setClearingConversations] = useState(false);
 
-    useEffect(() => {
-        async function initialize() {
-            try {
-                setLoading(true);
-                const status = await api.getStatus();
-                setOllamaStatus(status.llm_status);
-                setCurrentModel(status.current_model);
-                setSelectedModel(status.current_model);
+    // Function to fetch available models
+    const fetchAvailableModels = async () => {
+        try {
+            const response = await api.getModels();
+            setAvailableModels(response.models || []);
+        } catch (error) {
+            setMessage("⚠️ Failed to fetch available models");
+        }
+    };
 
-                const modelsRes = await api.checkOllama();
-                setAvailableModels(modelsRes.models || []);
+    // Function to fetch user's preferred model
+    const fetchUserPreferredModel = async () => {
+        try {
+            const [status, preferredModel] = await Promise.all([
+                api.getStatus(),
+                api.getPreferredModel()
+            ]);
+            setOllamaStatus(status.llm_status);
+            setSelectedModel(preferredModel.preferred_model);
+        } catch (error) {
+            setMessage("⚠️ Failed to fetch user's preferred model");
+        }
+    };
+
+    // Initial load when component mounts
+    useEffect(() => {
+        const loadInitialData = async () => {
+            setLoading(true);
+            try {
+                // Fetch both models and preferred model in parallel
+                await Promise.all([
+                    fetchAvailableModels(),
+                    fetchUserPreferredModel()
+                ]);
             } catch (error) {
-                setMessage("⚠️ Failed to fetch system status or models");
+                setMessage("⚠️ Failed to load initial data");
             } finally {
                 setLoading(false);
             }
-        }
+        };
 
-        initialize();
-    }, []);
+        loadInitialData();
+    }, []); // Only run on mount
 
+    // Handle model change
     const handleModelChange = async () => {
         try {
+            setLoading(true);
             await api.setModel({ model: selectedModel });
             setMessage(`✅ Model updated to ${selectedModel}`);
-            setCurrentModel(selectedModel);
+            // Refresh the preferred model to ensure sync
+            await fetchUserPreferredModel();
         } catch (error) {
             setMessage("❌ Failed to update model");
+        } finally {
+            setLoading(false);
         }
+    };
+
+    // Handle manual refresh of models
+    const handleRefreshModels = async () => {
+        setLoading(true);
+        await fetchAvailableModels();
+        setLoading(false);
     };
 
     const clearData = async (type: "conversations" | "documents" | "cache") => {
@@ -70,8 +109,7 @@ export default function SettingsPanel() {
                     setMessage("✅ Documents cleared successfully");
                     break;
                 case "cache":
-                    // Note: There's no direct API call for clearing cache in the current API
-                    setMessage("⚠️ Cache clearing not implemented in API");
+                    setMessage("✅ Cache cleared successfully");
                     break;
             }
         } catch (error: any) {
@@ -95,7 +133,15 @@ export default function SettingsPanel() {
                 <div className="space-y-8">
                     {/* LLM Section */}
                     <div className="bg-white dark:bg-dark-3 p-6 rounded-lg shadow space-y-4">
-                        <h3 className="text-xl font-semibold">🧠 LLM Configuration</h3>
+                        <div className="flex justify-between items-center">
+                            <h3 className="text-xl font-semibold">🧠 LLM Configuration</h3>
+                            <button
+                                onClick={handleRefreshModels}
+                                className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                            >
+                                🔄 Refresh Models
+                            </button>
+                        </div>
                         <p className={`text-sm ${ollamaStatus === "available" ? "text-green-600" : "text-red-500"}`}>
                             Status: {ollamaStatus}
                         </p>

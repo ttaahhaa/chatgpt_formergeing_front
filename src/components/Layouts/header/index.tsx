@@ -53,14 +53,16 @@ export function Header() {
     }
 
     const filteredTabs = tabs.filter(tab => {
-      if (tab.permission === "admin") {
-        const hasAccess = role === "admin";
-        console.log(`Tab ${tab.id} (admin): ${hasAccess}`);
-        return hasAccess;
+      // If user has "*" permission or is admin, show all tabs
+      if (permissions.includes("*") || role === "admin") {
+        return true;
       }
-      const hasAccess = permissions.includes(tab.permission);
-      console.log(`Tab ${tab.id} (${tab.permission}): ${hasAccess}`);
-      return hasAccess;
+      // For admin-specific tabs, check role
+      if (tab.permission === "admin") {
+        return role === "admin";
+      }
+      // For other tabs, check specific permission
+      return permissions.includes(tab.permission);
     });
 
     console.log('Filtered tabs:', filteredTabs);

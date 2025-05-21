@@ -31,4 +31,20 @@ export async function setModel(data: { model: string }) {
     } catch (error) {
         throw handleError(error, 'Failed to set model');
     }
+}
+
+/**
+ * Get user's preferred model
+ */
+export async function getPreferredModel() {
+    const options: FetchOptions = {
+        method: 'GET',
+        path: '/user/preferred-model',
+    };
+
+    try {
+        return await apiFetch<{ preferred_model: string }>(options);
+    } catch (error) {
+        throw handleError(error, 'Failed to fetch preferred model');
+    }
 } 

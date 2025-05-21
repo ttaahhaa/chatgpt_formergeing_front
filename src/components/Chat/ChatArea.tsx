@@ -112,17 +112,7 @@ const EmptyState = memo(function EmptyState() {
             </svg>
             <h2 className="text-xl font-medium mb-2">How can I help you today?</h2>
             <p className="max-w-md">Ask me anything about your documents, or any general knowledge questions.</p>
-            <div className="mt-8 grid gap-4 max-w-md w-full">
-                <button className="p-3 border border-gray-300 dark:border-gray-700 rounded-lg text-left hover:bg-gray-50 dark:hover:bg-dark-3 transition-colors">
-                    <span className="font-medium text-gray-700 dark:text-gray-300">Explain the Saudi legal system</span>
-                </button>
-                <button className="p-3 border border-gray-300 dark:border-gray-700 rounded-lg text-left hover:bg-gray-50 dark:hover:bg-dark-3 transition-colors">
-                    <span className="font-medium text-gray-700 dark:text-gray-300">Summarize document trends and patterns</span>
-                </button>
-                <button className="p-3 border border-gray-300 dark:border-gray-700 rounded-lg text-left hover:bg-gray-50 dark:hover:bg-dark-3 transition-colors">
-                    <span className="font-medium text-gray-700 dark:text-gray-300">How do I upload more documents?</span>
-                </button>
-            </div>
+
         </div>
     );
 });
@@ -165,10 +155,10 @@ export default function ChatArea() {
     // Load conversation when selected conversation changes
     useEffect(() => {
         const selectedId = conversationState.selectedConversationId;
-        
+
         // Update the current conversation id ref
         currentConversationIdRef.current = selectedId;
-        
+
         if (!selectedId) {
             setMessages([]);
             return;
@@ -178,7 +168,7 @@ export default function ChatArea() {
             try {
                 setIsLoading(true);
                 setError(null);
-                
+
                 const response = await api.getConversation(selectedId);
                 if (Array.isArray(response.messages)) {
                     setMessages(response.messages);
@@ -188,7 +178,7 @@ export default function ChatArea() {
             } catch (err: any) {
                 console.error("Error loading conversation:", err);
                 setError(err.message || "Failed to load conversation");
-                
+
                 // If conversation not found, create a new one
                 if (err.message && err.message.includes("not found")) {
                     try {
@@ -238,7 +228,7 @@ export default function ChatArea() {
             if (!currentConversationId) {
                 const newId = await createConversation();
                 currentConversationId = newId;
-                
+
                 if (!currentConversationId) {
                     throw new Error("Failed to create conversation");
                 }
@@ -304,7 +294,7 @@ export default function ChatArea() {
                             }
                             return updated;
                         });
-                        
+
                         setIsStreaming(false);
 
                         // Save conversation automatically after completion
@@ -362,7 +352,7 @@ export default function ChatArea() {
         if (abortControllerRef.current) {
             abortControllerRef.current.abort();
             setIsStreaming(false);
-            
+
             // Remove the streaming message
             setMessages(prev => {
                 if (prev[prev.length - 1]?.isStreaming) {
@@ -427,8 +417,8 @@ export default function ChatArea() {
     return (
         <div className="flex flex-col w-full max-w-6xl mx-auto px-4 py-6 h-full">
             {/* Mode selector */}
-            <div className="mb-5 flex items-center justify-between gap-6 flex-wrap">
-                <div className="flex items-center gap-6 flex-wrap">
+            <div className="mb-5 flex items-center justify-center gap-6 flex-wrap">
+                <div className="flex items-center gap-6 flex-wrap justify-center">
                     {["auto", "documents_only", "general_knowledge"].map((opt) => (
                         <label
                             key={opt}
@@ -448,17 +438,6 @@ export default function ChatArea() {
                         </label>
                     ))}
                 </div>
-
-                <button
-                    onClick={() => createConversation()}
-                    disabled={isStreaming}
-                    className="text-sm bg-gray-100 hover:bg-gray-200 dark:bg-dark-3 dark:hover:bg-dark-4 rounded-md px-3 py-1.5 flex items-center gap-1 transition-colors disabled:opacity-50"
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                    </svg>
-                    New Chat
-                </button>
             </div>
 
             {/* Chat messages */}
