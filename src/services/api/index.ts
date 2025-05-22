@@ -72,6 +72,7 @@ export const api = {
     getDocuments: documents.getDocuments,
     deleteDocument: documents.deleteDocument,
     clearDocuments: documents.clearDocuments,
+    clearAllDocuments: documents.clearAllDocuments,
 
     // Conversation methods
     createNewConversation: conversation.createNewConversation,

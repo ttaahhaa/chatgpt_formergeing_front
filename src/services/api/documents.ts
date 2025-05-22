@@ -91,8 +91,12 @@ export const deleteDocument = async (documentId: string): Promise<{ message: str
 
 export const clearDocuments = async (): Promise<void> => {
     try {
+        const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
         const response = await fetch(`${BASE_URL}/api/clear_documents`, {
             method: 'POST',
+            headers: {
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
         });
 
         if (!response.ok) {
@@ -101,6 +105,32 @@ export const clearDocuments = async (): Promise<void> => {
         }
     } catch (error: any) {
         console.error('API error in clearDocuments:', error);
+        throw error;
+    }
+};
+
+export const clearAllDocuments = async (): Promise<{ message: string }> => {
+    try {
+        const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+        const response = await fetch(`${BASE_URL}/api/clear_all_documents`, {
+            method: 'POST',
+            headers: {
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                'Content-Type': 'application/json'
+            },
+        });
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            if (response.status === 403) {
+                throw new Error('Permission denied: Admin access required');
+            }
+            throw new Error(error.error || `Failed to clear all documents: ${response.statusText}`);
+        }
+
+        return await response.json();
+    } catch (error: any) {
+        console.error('API error in clearAllDocuments:', error);
         throw error;
     }
 }; 

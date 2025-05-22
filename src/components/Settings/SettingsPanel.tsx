@@ -15,6 +15,8 @@ export default function SettingsPanel() {
     const [message, setMessage] = useState<string>("");
     const [loading, setLoading] = useState(true);
     const [clearingConversations, setClearingConversations] = useState(false);
+    const [showDocumentConfirmation, setShowDocumentConfirmation] = useState(false);
+    const [clearingDocuments, setClearingDocuments] = useState(false);
 
     // Function to fetch available models
     const fetchAvailableModels = async () => {
@@ -45,7 +47,6 @@ export default function SettingsPanel() {
         const loadInitialData = async () => {
             setLoading(true);
             try {
-                // Fetch both models and preferred model in parallel
                 await Promise.all([
                     fetchAvailableModels(),
                     fetchUserPreferredModel()
@@ -58,7 +59,7 @@ export default function SettingsPanel() {
         };
 
         loadInitialData();
-    }, []); // Only run on mount
+    }, []);
 
     // Handle model change
     const handleModelChange = async () => {
@@ -88,6 +89,9 @@ export default function SettingsPanel() {
                 return;
             }
             setClearingConversations(true);
+        } else if (type === "documents") {
+            setShowDocumentConfirmation(true);
+            return;
         }
 
         try {
@@ -104,10 +108,6 @@ export default function SettingsPanel() {
                         window.location.reload();
                     }, 1500);
                     break;
-                case "documents":
-                    await api.clearDocuments();
-                    setMessage("✅ Documents cleared successfully");
-                    break;
                 case "cache":
                     setMessage("✅ Cache cleared successfully");
                     break;
@@ -119,6 +119,23 @@ export default function SettingsPanel() {
                 setClearingConversations(false);
             }
         }
+    };
+
+    const confirmClearDocuments = async () => {
+        try {
+            setClearingDocuments(true);
+            const result = await api.clearAllDocuments();
+            setMessage(result.message || "✅ All documents cleared successfully");
+        } catch (error: any) {
+            setMessage(`❌ Failed to clear documents: ${error.message || error}`);
+        } finally {
+            setClearingDocuments(false);
+            setShowDocumentConfirmation(false);
+        }
+    };
+
+    const cancelClearDocuments = () => {
+        setShowDocumentConfirmation(false);
     };
 
     return (
@@ -176,9 +193,10 @@ export default function SettingsPanel() {
                             </button>
                             <button
                                 onClick={() => clearData("documents")}
-                                className="bg-gray-100 dark:bg-dark-2 px-4 py-2 rounded border shadow hover:bg-gray-200"
+                                disabled={clearingDocuments}
+                                className="bg-gray-100 dark:bg-dark-2 px-4 py-2 rounded border shadow hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                🗂 Clear Documents
+                                {clearingDocuments ? "Clearing..." : "🗂 Clear Documents"}
                             </button>
                             <button
                                 onClick={() => clearData("cache")}
@@ -194,6 +212,45 @@ export default function SettingsPanel() {
             {message && (
                 <div className="mt-6 text-sm text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-dark-2 px-4 py-2 rounded">
                     {message}
+                </div>
+            )}
+
+            {/* Document Clear Confirmation Modal */}
+            {showDocumentConfirmation && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
+                        <div className="flex items-center mb-4">
+                            <div className="flex-shrink-0">
+                                <svg className="h-6 w-6 text-red-500" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                </svg>
+                            </div>
+                            <h3 className="ml-3 text-lg font-medium text-gray-900 dark:text-white">
+                                Confirm Document Deletion
+                            </h3>
+                        </div>
+                        <div className="mt-2">
+                            <p className="text-sm text-gray-500 dark:text-gray-400">
+                                Are you absolutely sure you want to delete ALL documents? This action cannot be undone and will affect all users in the system.
+                            </p>
+                        </div>
+                        <div className="mt-4 flex justify-end space-x-3">
+                            <button
+                                onClick={cancelClearDocuments}
+                                disabled={clearingDocuments}
+                                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={confirmClearDocuments}
+                                disabled={clearingDocuments}
+                                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {clearingDocuments ? "Deleting..." : "Yes, Delete All Documents"}
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>
