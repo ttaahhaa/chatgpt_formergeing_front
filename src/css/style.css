@@ -101,15 +101,15 @@
 }
 
 .apexcharts-xaxistooltip-bottom:after {
-  @apply !border-b-gray dark:!border-b-dark;
+  @apply !border-b-gray-base dark:!border-b-dark;
 }
 
 .apexcharts-xaxistooltip-bottom:before {
-  @apply !border-b-gray dark:!border-b-dark;
+  @apply !border-b-gray-base dark:!border-b-dark;
 }
 
 .apexcharts-xaxistooltip-bottom {
-  @apply !rounded !border-none !bg-gray !text-sm !font-medium !text-dark dark:!bg-dark dark:!text-white;
+  @apply !rounded !border-none !bg-gray-base !text-sm !font-medium !text-dark dark:!bg-dark dark:!text-white;
 }
 
 .apexcharts-tooltip-series-group {

@@ -23,6 +23,18 @@ const nextConfig = {
         port: ""
       }
     ]
+  },
+  // Add CSS optimization settings
+  experimental: {
+    optimizeCss: true
+  },
+  // Add webpack configuration for CSS
+  webpack: (config) => {
+    config.module.rules.push({
+      test: /\.css$/,
+      use: ['style-loader', 'css-loader', 'postcss-loader']
+    });
+    return config;
   }
 };
 
