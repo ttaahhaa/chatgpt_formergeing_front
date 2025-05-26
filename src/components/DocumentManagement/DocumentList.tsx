@@ -2,12 +2,16 @@
 
 import { useState, useEffect } from "react";
 import { api } from "@/services/api";
+import { useAuth } from "@/contexts/AuthContext";
 
 export function DocumentList() {
     const [documents, setDocuments] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [success, setSuccess] = useState<string | null>(null);
     const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+    const [buildLoading, setBuildLoading] = useState(false);
+    const { user } = useAuth();
 
     const fetchDocuments = async () => {
         setLoading(true);
@@ -46,6 +50,26 @@ export function DocumentList() {
 
     const handlePreview = (doc: any) => {
         alert(doc.content?.slice(0, 1000) + "...");
+    };
+
+    const handleBuild = async () => {
+        if (!user?.id) {
+            setError("User ID not found");
+            return;
+        }
+
+        try {
+            setBuildLoading(true);
+            setError(null);
+
+            const result = await api.buildKnowledgeGraph(user.id);
+            setSuccess(result.message || "Knowledge graph built successfully");
+        } catch (err: any) {
+            console.error("Error building knowledge graph:", err);
+            setError(err.message || "Failed to build knowledge graph");
+        } finally {
+            setBuildLoading(false);
+        }
     };
 
     useEffect(() => {
@@ -88,6 +112,18 @@ export function DocumentList() {
             <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
                 📁 Loaded Documents
             </h2>
+
+            {error && (
+                <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+                    {error}
+                </div>
+            )}
+
+            {success && (
+                <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
+                    {success}
+                </div>
+            )}
 
             <div className="grid grid-cols-3 gap-4 text-center my-6">
                 <div>
@@ -151,7 +187,7 @@ export function DocumentList() {
                     {/* Actions */}
                     <div className="mt-6">
                         <h3 className="text-lg font-medium mb-4">Batch Actions</h3>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                             <button
                                 onClick={() => setShowConfirmDialog(true)}
                                 className="flex items-center justify-center gap-2 bg-red-500 hover:bg-red-600 text-white rounded-md py-3"
@@ -164,6 +200,18 @@ export function DocumentList() {
                                 className="flex items-center justify-center gap-2 bg-purple-500 hover:bg-purple-600 text-white rounded-md py-3"
                             >
                                 🔄 Refresh Document List
+                            </button>
+
+                            <button
+                                onClick={handleBuild}
+                                disabled={buildLoading}
+                                className={`flex items-center justify-center gap-2 ${
+                                    buildLoading
+                                        ? "bg-gray-400 cursor-not-allowed"
+                                        : "bg-blue-500 hover:bg-blue-600"
+                                } text-white rounded-md py-3`}
+                            >
+                                {buildLoading ? "Building..." : "🏗️ Build Knowledge Graph"}
                             </button>
                         </div>
                     </div>

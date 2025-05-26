@@ -133,4 +133,28 @@ export const clearAllDocuments = async (): Promise<{ message: string }> => {
         console.error('API error in clearAllDocuments:', error);
         throw error;
     }
+};
+
+export const buildKnowledgeGraph = async (userId?: string): Promise<{ message: string }> => {
+    try {
+        const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+        const response = await fetch(`${BASE_URL}/api/knowledge_graph/build`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+            body: JSON.stringify({ user_id: userId })
+        });
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.message || `Failed to build knowledge graph: ${response.statusText}`);
+        }
+
+        return await response.json();
+    } catch (error: any) {
+        console.error('API error in buildKnowledgeGraph:', error);
+        throw error;
+    }
 }; 

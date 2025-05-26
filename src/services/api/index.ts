@@ -5,6 +5,8 @@ import * as conversation from './conversation';
 import * as status from './status';
 import * as logs from './logs';
 import * as settings from './settings';
+import { apiFetch, FetchOptions } from './core';
+import { handleError } from './utils';
 
 // Define shared types
 export interface ChatRequest {
@@ -60,64 +62,42 @@ export type { StatusResponse, OllamaStatusResponse } from './status';
 export type { LogsResponse, LogContentResponse } from './logs';
 export type { Document, DocumentsResponse } from './documents';
 
-// API service with methods for all operations
-export const api = {
-    // Auth methods - using the singleton AuthService
-    get auth() {
-        return AuthService.getInstance();
-    },
+export const clearCache = async (): Promise<void> => {
+    const options: FetchOptions = {
+        method: 'POST',
+        path: '/clear_cache',
+    };
 
-    // Document methods
+    try {
+        return await apiFetch(options);
+    } catch (error) {
+        throw handleError(error, 'Failed to clear cache');
+    }
+};
+
+export const api = {
+    auth: AuthService.getInstance(),
     uploadDocument: documents.uploadDocument,
     getDocuments: documents.getDocuments,
     deleteDocument: documents.deleteDocument,
     clearDocuments: documents.clearDocuments,
     clearAllDocuments: documents.clearAllDocuments,
-
-    // Conversation methods
-    createNewConversation: conversation.createNewConversation,
     getConversations: conversation.getConversations,
     getConversation: conversation.getConversation,
-    saveConversation: conversation.saveConversation,
+    createNewConversation: conversation.createNewConversation,
     deleteConversation: conversation.deleteConversation,
     clearAllConversations: conversation.clearAllConversations,
     chat: conversation.chat,
     createAbortController: conversation.createAbortController,
     streamChatWithAbort: conversation.streamChatWithAbort,
-
-    // Status methods
     getStatus: status.getStatus,
     checkOllama: status.checkOllama,
-
-    // Log methods
     getLogs: logs.getLogs,
     getLogContent: logs.getLogContent,
-
-    // Query the knowledge base
-    async query(query: string): Promise<ChatResponse> {
-        try {
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/query`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ query }),
-            });
-
-            if (!response.ok) {
-                const error = await response.json().catch(() => ({}));
-                throw new Error(error.message || `Failed to query knowledge base: ${response.statusText}`);
-            }
-
-            return await response.json();
-        } catch (error: any) {
-            console.error('API error in query:', error);
-            throw error;
-        }
-    },
-
-    // Settings
     getModels: settings.getModels,
     setModel: settings.setModel,
     getPreferredModel: settings.getPreferredModel,
+    clearCache,
+    buildKnowledgeGraph: documents.buildKnowledgeGraph,
+    saveConversation: conversation.saveConversation,
 };

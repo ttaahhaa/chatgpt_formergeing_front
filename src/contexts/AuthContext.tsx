@@ -7,14 +7,13 @@ import { api } from '@/services/api';
 import { Message } from '@/contexts/ChatContext';
 import { getOrCreateEmptyConversation } from '@/utils/conversation';
 
-interface AuthContextType {
+export interface AuthContextType {
+    isAuthenticated: boolean;
     role: string | null;
     permissions: string[];
-    isAuthenticated: boolean;
-    userInfo: {
-        name: string;
-        email: string;
-        img: string;
+    user: {
+        id: string;
+        [key: string]: any;
     } | null;
     login: (username: string, password: string) => Promise<void>;
     logout: () => void;
@@ -27,7 +26,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         role: null,
         permissions: [],
         isAuthenticated: false,
-        userInfo: null,
+        user: null,
         login: async () => { },
         logout: () => { }
     });
@@ -43,7 +42,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     role: userInfo.role,
                     permissions: userInfo.permissions,
                     isAuthenticated: true,
-                    userInfo: {
+                    user: {
+                        id: userInfo.id,
                         name: userInfo.name || userInfo.username,
                         email: userInfo.email || '',
                         img: userInfo.img || ''
@@ -55,7 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     role: null,
                     permissions: [],
                     isAuthenticated: false,
-                    userInfo: null
+                    user: null
                 }));
             }
         } catch (error) {
@@ -65,7 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 role: null,
                 permissions: [],
                 isAuthenticated: false,
-                userInfo: null
+                user: null
             }));
         }
     }, [auth]);

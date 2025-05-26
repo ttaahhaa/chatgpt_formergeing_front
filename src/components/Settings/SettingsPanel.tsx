@@ -109,6 +109,7 @@ export default function SettingsPanel() {
                     }, 1500);
                     break;
                 case "cache":
+                    await api.clearCache();
                     setMessage("✅ Cache cleared successfully");
                     break;
             }

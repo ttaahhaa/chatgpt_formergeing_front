@@ -77,21 +77,8 @@ export default function TabPage({ params }: { params: { tab: string } }) {
 
     return (
         <ProtectedRoute>
-            <div className="flex-1 overflow-hidden flex">
-                {tab === "chats" && (
-                    permissions.canAccessChat ? (
-                        <ChatTab />
-                    ) : (
-                        <div className="flex items-center justify-center h-full">
-                            <div className="text-center">
-                                <h2 className="text-2xl font-bold mb-2">Access Denied</h2>
-                                <p className="text-gray-600 dark:text-gray-400">
-                                    You don&apos;t have permission to access the chat feature.
-                                </p>
-                            </div>
-                        </div>
-                    )
-                )}
+            <div className="flex-1 overflow-y-auto">
+                {tab === "chats" && permissions.canAccessChat && <ChatTab />}
                 {tab === "documents" && (
                     permissions.canAccessDocuments ? (
                         <DocumentManagement />
